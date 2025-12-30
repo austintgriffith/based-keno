@@ -25,7 +25,7 @@ contract DeployCredits is ScaffoldETHDeploy {
      *      - Export contract addresses & ABIs to `nextjs` packages
      */
     function run() external ScaffoldEthDeployerRunner {
-        new Credits(0x05937Df8ca0636505d92Fd769d303A3D461587ed);
+        new Credits(deployer);
     }
 }
 

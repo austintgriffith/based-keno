@@ -2,7 +2,8 @@
 pragma solidity ^0.8.24;
 
 import "./DeployHelpers.s.sol";
-import { DeployCredits } from "./DeployCredits.s.sol";
+import "../contracts/Credits.sol";
+import "../contracts/CreditsDex.sol";
 
 /**
  * @notice Main deployment script for all contracts
@@ -11,15 +12,14 @@ import { DeployCredits } from "./DeployCredits.s.sol";
  * Example: yarn deploy # runs this script(without`--file` flag)
  */
 contract DeployScript is ScaffoldETHDeploy {
-    function run() external {
-        // Deploys all your contracts sequentially
-        // Add new deployments here when needed
+    // USDC address on Base
+    address constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-        DeployCredits deployCredits = new DeployCredits();
-        deployCredits.run();
-
-        // Deploy another contract
-        // DeployMyContract myContract = new DeployMyContract();
-        // myContract.run();
+    function run() external ScaffoldEthDeployerRunner {
+        // Deploy Credits token with specific owner for minting
+        Credits credits = new Credits(0x05937Df8ca0636505d92Fd769d303A3D461587ed);
+        
+        // Deploy CreditsDex with Credits and USDC
+        new CreditsDex(address(credits), USDC_BASE);
     }
 }

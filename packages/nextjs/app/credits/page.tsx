@@ -5,7 +5,7 @@ import { AddressInput, EtherInput } from "@scaffold-ui/components";
 import type { NextPage } from "next";
 import { Address as AddressType, Hex, formatEther, parseEther } from "viem";
 import { useAccount, useSignTypedData } from "wagmi";
-import { DocumentDuplicateIcon, PaperAirplaneIcon } from "@heroicons/react/24/outline";
+import { DocumentDuplicateIcon, PaperAirplaneIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import {
   useCopyToClipboard,
   useDeployedContractInfo,
@@ -52,7 +52,7 @@ const Credits: NextPage = () => {
   const { data: creditsContract } = useDeployedContractInfo({ contractName: "Credits" });
 
   // Read user's balance
-  const { data: balance } = useScaffoldReadContract({
+  const { data: balance, refetch: refetchBalance } = useScaffoldReadContract({
     contractName: "Credits",
     functionName: "balanceOf",
     args: [connectedAddress],
@@ -67,6 +67,18 @@ const Credits: NextPage = () => {
   // Execute panel state
   const [pastedAuth, setPastedAuth] = useState("");
   const [parseError, setParseError] = useState("");
+
+  // Mint panel state
+  const [mintToAddress, setMintToAddress] = useState<AddressType | "">("");
+  const [mintAmount, setMintAmount] = useState("");
+
+  // Read contract owner
+  const { data: owner } = useScaffoldReadContract({
+    contractName: "Credits",
+    functionName: "owner",
+  });
+
+  const isOwner = connectedAddress && owner && connectedAddress.toLowerCase() === owner.toLowerCase();
 
   // Wagmi sign typed data hook
   const { signTypedDataAsync } = useSignTypedData();
@@ -184,6 +196,23 @@ const Credits: NextPage = () => {
     }
   };
 
+  // Handle mint (owner only)
+  const handleMint = async () => {
+    if (!mintToAddress || !mintAmount) return;
+
+    try {
+      await writeContractAsync({
+        functionName: "mint",
+        args: [mintToAddress as AddressType, parseEther(mintAmount)],
+      });
+
+      setMintAmount("");
+      refetchBalance();
+    } catch (error) {
+      console.error("Mint failed:", error);
+    }
+  };
+
   const formattedBalance = balance ? formatEther(balance) : "0";
 
   return (
@@ -195,6 +224,49 @@ const Credits: NextPage = () => {
           {parseFloat(formattedBalance).toLocaleString(undefined, { maximumFractionDigits: 4 })} CRED
         </p>
       </div>
+
+      {/* Mint Panel (Owner Only) */}
+      {isOwner && (
+        <div className="bg-gradient-to-br from-primary/20 to-secondary/20 rounded-3xl p-6 shadow-lg mb-8 w-full max-w-md border border-primary/30">
+          <h3 className="text-xl font-bold mb-4 text-center flex items-center justify-center gap-2">
+            <SparklesIcon className="h-6 w-6 text-primary" />
+            Mint Credits (Owner)
+          </h3>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Recipient Address</label>
+              <AddressInput
+                placeholder="0x..."
+                value={mintToAddress}
+                onChange={value => setMintToAddress(value as AddressType)}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block">Amount to Mint (CRED)</label>
+              <EtherInput
+                placeholder="1000"
+                onValueChange={({ valueInEth }) => setMintAmount(valueInEth)}
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleMint}
+              disabled={!mintToAddress || !mintAmount || isMining}
+            >
+              {isMining ? (
+                <span className="loading loading-spinner loading-sm"></span>
+              ) : (
+                <SparklesIcon className="h-5 w-5" />
+              )}
+              Mint Credits
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl">
