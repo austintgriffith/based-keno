@@ -74,11 +74,6 @@ const HousePage: NextPage = () => {
     functionName: "totalPool",
   });
 
-  const { data: liquidPool, refetch: refetchLiquidPool } = useScaffoldReadContract({
-    contractName: "HousePool",
-    functionName: "liquidPool",
-  });
-
   const { data: vaultPool, refetch: refetchVaultPool } = useScaffoldReadContract({
     contractName: "HousePool",
     functionName: "vaultPool",
@@ -141,7 +136,6 @@ const HousePage: NextPage = () => {
   // Refetch all data
   const refetchAll = useCallback(() => {
     refetchTotalPool();
-    refetchLiquidPool();
     refetchVaultPool();
     refetchEffectivePool();
     refetchSharePrice();
@@ -154,7 +148,6 @@ const HousePage: NextPage = () => {
     refetchWithdrawalRequest();
   }, [
     refetchTotalPool,
-    refetchLiquidPool,
     refetchVaultPool,
     refetchEffectivePool,
     refetchSharePrice,
@@ -297,6 +290,10 @@ const HousePage: NextPage = () => {
   const formatUsdc = (value: bigint | undefined) =>
     value ? parseFloat(formatUnits(value, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0";
 
+  // High precision for showing tiny yield accumulation (all 6 USDC decimals)
+  const formatUsdcPrecise = (value: bigint | undefined) =>
+    value ? parseFloat(formatUnits(value, USDC_DECIMALS)).toFixed(6) : "0.000000";
+
   const formatHouse = (value: bigint | undefined) =>
     value
       ? parseFloat(formatUnits(value, HOUSE_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 4 })
@@ -371,23 +368,13 @@ const HousePage: NextPage = () => {
           DeFi Yield Generation
           <span className="ml-auto text-sm font-normal text-base-content/60">via Summer.fi</span>
         </h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-base-100/50 rounded-xl p-4">
-            <p className="text-sm text-base-content/60 flex items-center gap-1">
-              <CubeIcon className="h-4 w-4" />
-              In Vault (Earning Yield)
-            </p>
-            <p className="text-2xl font-bold text-emerald-500">${formatUsdc(vaultPool)}</p>
-            <p className="text-xs text-base-content/50">{vaultPercentage}% of pool earning yield</p>
-          </div>
-          <div className="bg-base-100/50 rounded-xl p-4">
-            <p className="text-sm text-base-content/60 flex items-center gap-1">
-              <BanknotesIcon className="h-4 w-4" />
-              Liquid (Pending)
-            </p>
-            <p className="text-2xl font-bold">${formatUsdc(liquidPool)}</p>
-            <p className="text-xs text-base-content/50">Temporarily held for transfers</p>
-          </div>
+        <div className="bg-base-100/50 rounded-xl p-4">
+          <p className="text-sm text-base-content/60 flex items-center gap-1">
+            <CubeIcon className="h-4 w-4" />
+            In Vault (Earning Yield)
+          </p>
+          <p className="text-2xl font-bold text-emerald-500 font-mono">${formatUsdcPrecise(vaultPool)}</p>
+          <p className="text-xs text-base-content/50">{vaultPercentage}% of pool earning yield</p>
         </div>
         <p className="text-xs text-base-content/50 mt-3 text-center">
           100% of idle USDC is deposited into Summer.fi&apos;s LVUSDC vault to earn yield. Withdrawals happen instantly
@@ -409,7 +396,7 @@ const HousePage: NextPage = () => {
             </div>
             <div className="bg-base-100/50 rounded-xl p-4">
               <p className="text-sm text-base-content/60">USDC Value</p>
-              <p className="text-2xl font-bold text-primary">${formatUsdc(userUsdcValue)}</p>
+              <p className="text-2xl font-bold text-primary font-mono">${formatUsdcPrecise(userUsdcValue)}</p>
             </div>
             <div className="bg-base-100/50 rounded-xl p-4">
               <p className="text-sm text-base-content/60">Wallet USDC</p>
