@@ -4,115 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { NextPage } from "next";
 import { formatUnits } from "viem";
-import { useAccount, useBlockNumber, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, useBlockNumber } from "wagmi";
 import { HomeModernIcon } from "@heroicons/react/24/outline";
 import { BetPanel, CardData, KenoBoard, PlayerCards, RoundPhase, RoundStatus } from "~~/components/keno";
-import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals
 const USDC_DECIMALS = 6;
 
-// Base USDC address
-const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
-// USDC ABI for approve and balance
-const USDC_ABI = [
-  {
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
-
 // Constants from contract
 const BETTING_PERIOD_BLOCKS = 30;
-
-// BasedKeno ABI (minimal - for functions we need before deploy regenerates deployedContracts.ts)
-const BASED_KENO_ABI = [
-  {
-    inputs: [],
-    name: "housePool",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "maxBet",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "getCurrentRound",
-    outputs: [
-      { name: "roundId", type: "uint256" },
-      { name: "phase", type: "uint8" },
-      { name: "startBlock", type: "uint256" },
-      { name: "commitBlock", type: "uint256" },
-      { name: "totalCards", type: "uint256" },
-      { name: "totalBets", type: "uint256" },
-      { name: "canBet", type: "bool" },
-      { name: "canCommit", type: "bool" },
-      { name: "canRefund", type: "bool" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "roundId", type: "uint256" }],
-    name: "getWinningNumbers",
-    outputs: [{ name: "", type: "uint8[20]" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "player", type: "address" },
-      { name: "roundId", type: "uint256" },
-    ],
-    name: "getPlayerCards",
-    outputs: [{ name: "", type: "uint256[]" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "numbers", type: "uint8[]" },
-      { name: "betAmount", type: "uint256" },
-    ],
-    name: "placeBet",
-    outputs: [{ name: "cardId", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "roundId", type: "uint256" },
-      { name: "cardId", type: "uint256" },
-    ],
-    name: "claimWinnings",
-    outputs: [{ name: "payout", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-] as const;
-
-// Placeholder address until deployed - will be replaced by deployedContracts.ts
-const BASED_KENO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
@@ -126,16 +27,9 @@ const Home: NextPage = () => {
   // Get current block number
   const { data: blockNumber } = useBlockNumber({ watch: true });
 
-  // Get deployed contract addresses
+  // Get contract addresses
   const { data: housePoolContractInfo } = useDeployedContractInfo({ contractName: "HousePool" });
   const housePoolAddress = housePoolContractInfo?.address;
-
-  // BasedKeno address - will be populated when contracts are deployed
-  // For now, we check if BasedKeno exists in deployed contracts
-  const { data: basedKenoContractInfo } = useDeployedContractInfo({
-    contractName: "BasedKeno" as "HousePool",
-  });
-  const basedKenoAddress = basedKenoContractInfo?.address || BASED_KENO_ADDRESS;
 
   // Read pool stats
   const { data: effectivePool, refetch: refetchEffectivePool } = useScaffoldReadContract({
@@ -143,50 +37,46 @@ const Home: NextPage = () => {
     functionName: "effectivePool",
   });
 
-  // Read max bet
-  const { data: maxBetData, refetch: refetchMaxBet } = useReadContract({
-    address: basedKenoAddress as `0x${string}`,
-    abi: BASED_KENO_ABI,
+  // Read max bet from BasedKeno
+  const { data: maxBetData, refetch: refetchMaxBet } = useScaffoldReadContract({
+    contractName: "BasedKeno",
     functionName: "maxBet",
   });
 
   // Read current round info
-  const { data: currentRoundData, refetch: refetchCurrentRound } = useReadContract({
-    address: basedKenoAddress as `0x${string}`,
-    abi: BASED_KENO_ABI,
+  const { data: currentRoundData, refetch: refetchCurrentRound } = useScaffoldReadContract({
+    contractName: "BasedKeno",
     functionName: "getCurrentRound",
   });
 
   // Read user USDC balance
-  const { data: userUsdcBalance, refetch: refetchUserUsdcBalance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: USDC_ABI,
+  const { data: userUsdcBalance, refetch: refetchUserUsdcBalance } = useScaffoldReadContract({
+    contractName: "USDC",
     functionName: "balanceOf",
-    args: connectedAddress ? [connectedAddress] : undefined,
+    args: [connectedAddress],
   });
 
   // Read player's cards for current round
-  const { data: playerCardIds, refetch: refetchPlayerCardIds } = useReadContract({
-    address: basedKenoAddress as `0x${string}`,
-    abi: BASED_KENO_ABI,
+  const { data: playerCardIds, refetch: refetchPlayerCardIds } = useScaffoldReadContract({
+    contractName: "BasedKeno",
     functionName: "getPlayerCards",
-    args: connectedAddress && currentRoundData ? [connectedAddress, currentRoundData[0]] : undefined,
+    args: [connectedAddress, currentRoundData ? currentRoundData[0] : 0n],
   });
 
   // Read winning numbers (only when round is revealed)
   const roundId = currentRoundData ? currentRoundData[0] : 0n;
 
   // For revealed rounds, get winning numbers from previous round
-  const { data: winningNumbersData } = useReadContract({
-    address: basedKenoAddress as `0x${string}`,
-    abi: BASED_KENO_ABI,
+  const { data: winningNumbersData } = useScaffoldReadContract({
+    contractName: "BasedKeno",
     functionName: "getWinningNumbers",
-    args: roundId > 0n ? [roundId - 1n] : undefined,
+    args: [roundId > 0n ? roundId - 1n : 0n],
   });
 
   // Write hooks
-  const { writeContractAsync: writeBasedKeno, isPending: isBasedKenoWritePending } = useWriteContract();
-  const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useWriteContract();
+  const { writeContractAsync: writeBasedKeno, isPending: isBasedKenoWritePending } =
+    useScaffoldWriteContract("BasedKeno");
+  const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useScaffoldWriteContract("USDC");
 
   // Parse round data
   const currentRound = {
@@ -230,11 +120,9 @@ const Home: NextPage = () => {
       const cards: CardData[] = [];
       for (const cardId of playerCardIds) {
         try {
-          // We need to call getCard for each card ID - using raw contract read
-          // For now, we'll just track the card IDs and show basic info
           cards.push({
             cardId,
-            numbers: [], // Will be filled in when we have more contract reads
+            numbers: [],
             betAmount: 0n,
             claimed: false,
           });
@@ -282,10 +170,8 @@ const Home: NextPage = () => {
     if (!housePoolAddress || selectedNumbers.length === 0) return;
 
     try {
-      // Approve USDC
+      // Approve USDC to HousePool (not BasedKeno - HousePool pulls the funds)
       await writeUsdc({
-        address: USDC_ADDRESS,
-        abi: USDC_ABI,
         functionName: "approve",
         args: [housePoolAddress, amount],
       });
@@ -298,8 +184,6 @@ const Home: NextPage = () => {
       const numbersAsUint8 = selectedNumbers.map(n => n);
 
       await writeBasedKeno({
-        address: basedKenoAddress as `0x${string}`,
-        abi: BASED_KENO_ABI,
         functionName: "placeBet",
         args: [numbersAsUint8, amount],
       });
@@ -323,8 +207,6 @@ const Home: NextPage = () => {
       const claimRoundId = currentRound.roundId > 0n ? currentRound.roundId - 1n : 0n;
 
       await writeBasedKeno({
-        address: basedKenoAddress as `0x${string}`,
-        abi: BASED_KENO_ABI,
         functionName: "claimWinnings",
         args: [claimRoundId, cardId],
       });
@@ -407,9 +289,7 @@ const Home: NextPage = () => {
                   <div className="text-2xl">💵</div>
                   <div>
                     <p className="text-xs text-base-content/60 uppercase tracking-wide">Your USDC</p>
-                    <p className="text-xl font-bold text-green-400">
-                      ${formatUsdc(userUsdcBalance as bigint | undefined)}
-                    </p>
+                    <p className="text-xl font-bold text-green-400">${formatUsdc(userUsdcBalance)}</p>
                   </div>
                 </div>
               </div>
@@ -430,7 +310,7 @@ const Home: NextPage = () => {
             <BetPanel
               selectedNumbers={selectedNumbers}
               maxBet={maxBetData ?? 0n}
-              userBalance={(userUsdcBalance as bigint) ?? 0n}
+              userBalance={userUsdcBalance ?? 0n}
               onPlaceBet={handlePlaceBet}
               onQuickPick={quickPick}
               onClearSelection={clearSelection}
