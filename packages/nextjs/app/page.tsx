@@ -43,6 +43,7 @@ const Home: NextPage = () => {
   const [pendingSecret, setPendingSecret] = useState<string | null>(null);
   const [lastRollResult, setLastRollResult] = useState<{ won: boolean; payout: string } | null>(null);
   const [revealTxHash, setRevealTxHash] = useState<`0x${string}` | undefined>(undefined);
+  const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
 
   // Get contract info
   const { data: housePoolContract } = useDeployedContractInfo({ contractName: "HousePool" });
@@ -184,6 +185,11 @@ const Home: NextPage = () => {
         args: [housePoolContract.address, rollCost],
       });
 
+      // Wait 3 seconds for approval to settle on-chain
+      setIsWaitingForApproval(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsWaitingForApproval(false);
+
       await writeHousePool({
         functionName: "commitRoll",
         args: [commitHash],
@@ -193,6 +199,7 @@ const Home: NextPage = () => {
       refetchAll();
     } catch (error) {
       console.error("Commit roll failed:", error);
+      setIsWaitingForApproval(false);
     }
   };
 
@@ -243,7 +250,7 @@ const Home: NextPage = () => {
     }
   }, []);
 
-  const isLoading = isHousePoolWritePending || isUsdcWritePending;
+  const isLoading = isHousePoolWritePending || isUsdcWritePending || isWaitingForApproval;
 
   // Format helpers
   const formatUsdc = (value: bigint | undefined) =>
@@ -437,7 +444,10 @@ const Home: NextPage = () => {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <span className="loading loading-spinner loading-md"></span>
+                  <>
+                    <span className="loading loading-spinner loading-md"></span>
+                    {isWaitingForApproval && <span>Waiting for approval...</span>}
+                  </>
                 ) : (
                   <>
                     <SparklesIcon className="h-6 w-6" />
@@ -480,7 +490,10 @@ const Home: NextPage = () => {
               disabled={isLoading || !connectedAddress}
             >
               {isLoading ? (
-                <span className="loading loading-spinner loading-md"></span>
+                <>
+                  <span className="loading loading-spinner loading-md"></span>
+                  {isWaitingForApproval && <span>Waiting for approval...</span>}
+                </>
               ) : (
                 <>
                   <SparklesIcon className="h-6 w-6" />

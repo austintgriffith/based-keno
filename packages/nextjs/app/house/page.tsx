@@ -42,6 +42,7 @@ const HousePage: NextPage = () => {
   // State for user inputs
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawShares, setWithdrawShares] = useState("");
+  const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
 
   // Get contract info
   const { data: housePoolContract } = useDeployedContractInfo({ contractName: "HousePool" });
@@ -157,6 +158,11 @@ const HousePage: NextPage = () => {
         args: [housePoolContract.address, amountUsdc],
       });
 
+      // Wait 3 seconds for approval to settle on-chain
+      setIsWaitingForApproval(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsWaitingForApproval(false);
+
       // Deposit
       await writeHousePool({
         functionName: "deposit",
@@ -167,6 +173,7 @@ const HousePage: NextPage = () => {
       refetchAll();
     } catch (error) {
       console.error("Deposit failed:", error);
+      setIsWaitingForApproval(false);
     }
   };
 
@@ -215,7 +222,7 @@ const HousePage: NextPage = () => {
     }
   };
 
-  const isLoading = isHousePoolWritePending || isUsdcWritePending;
+  const isLoading = isHousePoolWritePending || isUsdcWritePending || isWaitingForApproval;
 
   // Format helpers
   const formatUsdc = (value: bigint | undefined) =>
@@ -333,7 +340,14 @@ const HousePage: NextPage = () => {
             onClick={handleDeposit}
             disabled={isLoading || !depositAmount || !connectedAddress}
           >
-            {isLoading ? <span className="loading loading-spinner loading-sm"></span> : "Buy HOUSE"}
+            {isLoading ? (
+              <>
+                <span className="loading loading-spinner loading-sm"></span>
+                {isWaitingForApproval && <span className="ml-2">Waiting for approval...</span>}
+              </>
+            ) : (
+              "Buy HOUSE"
+            )}
           </button>
         </div>
 
