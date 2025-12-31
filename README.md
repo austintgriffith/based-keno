@@ -1,220 +1,127 @@
-# 🎰 DAMM
+# 🏠 House Pool
 
-> **D**IFFERENT + **A**utomated **M**arket **M**aker (some crying in the casino)
-
-A hybrid DEX and gambling protocol where **CREDITS token holders are the house**. LPs earn swap fees but also provide the house's bankroll (the excess buffer) - they take on the gambling risk in exchange for their share of any profits.
+> A simplified gambling pool where **LP tokens = house ownership**. Deposit USDC to become the house.
 
 ## Core Concept
 
-DAMM combines a traditional AMM DEX with a gambling mechanism. The key innovation is the **Excess Pool** - a USDC buffer that:
+House Pool is a single-contract gambling protocol where:
 
-1. **Protects swap pricing** from gambling volatility
-2. **Absorbs gambling winnings** without tanking the CREDITS price
-3. **Overflows profits to reserves** when full, appreciating CREDITS
+- **One token (HOUSE)** represents your share of the USDC pool
+- **Share price grows** as the house profits from gambling
+- **No AMM complexity** - just deposit USDC, get HOUSE, withdraw at pool ratio
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      CreditsDex Contract                    │
+│                      HousePool Contract                     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  RESERVES (determines swap price)                           │
-│  ┌─────────────────┬─────────────────┐                      │
-│  │  USDC Reserves  │  CREDITS        │                      │
-│  │  (pricing only) │  Reserves       │                      │
-│  └─────────────────┴─────────────────┘                      │
-│           ↑                                                 │
-│           │ overflow when excess > 100 USDC                 │
-│           │                                                 │
-│  EXCESS (house buffer, USDC only, max 100)                  │
-│  ┌─────────────────┐                                        │
-│  │  USDC Excess    │ ← gambling payments fill this first    │
-│  │  (max 100)      │ ← winnings paid from here first        │
-│  └─────────────────┘                                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              USDC Pool                              │   │
+│  │  Deposits + Gambling Profits - Gambling Losses      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                          ↕                                  │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │           HOUSE Token (ERC20)                       │   │
+│  │  Your share of the pool = your HOUSE / total HOUSE  │   │
+│  └─────────────────────────────────────────────────────┘   │
 │                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  LP Token = share of (reserves + excess)                    │
-│  Swap price = reserves ratio ONLY                           │
-│  CREDITS = ownership stake in "the house"                   │
+│  Share Price = Total USDC / Total HOUSE Supply             │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## How It Works
 
-### The Excess Pool
+### For LPs (House Owners)
 
-The **Excess Pool** is a USDC buffer (capped at 100 USDC) that acts as the "house bankroll" for gambling:
+1. **Deposit USDC** → Receive HOUSE tokens at current share price
+2. **Hold** → As gamblers lose, pool grows, your shares worth more
+3. **Withdraw** → Request withdrawal (5 min cooldown) → Execute within 24hr window
 
-| USDC Flow           | Where It Goes                     | Price Effect                  |
-| ------------------- | --------------------------------- | ----------------------------- |
-| Gambling payment    | Excess first, overflow → Reserves | UP when overflows             |
-| Gambling win payout | Excess first, then Reserves       | DOWN only if reserves touched |
-| LP deposit          | Excess first, overflow → Reserves | UP when overflows             |
-| LP withdraw         | Proportional from both            | None                          |
-| Swap                | Reserves only                     | Normal AMM                    |
+### For Gamblers
 
-### CREDITS = House Ownership
+Two-step commit-reveal process (prevents manipulation):
 
-When you hold CREDITS, you're essentially owning a piece of the casino:
+1. **Commit**: Pay 1 USDC, submit hash of your secret
+2. **Wait**: 2+ blocks
+3. **Reveal**: Submit secret, get result
 
-- **House wins** → Excess fills up → Overflows to reserves → **CREDITS price goes UP**
-- **House loses** → Paid from excess first → Price stays stable until excess depleted
-- **More LP capital** → Stronger house → **CREDITS price goes UP**
+- **Cost**: 1 USDC
+- **Win Chance**: ~9% (1/11)
+- **Payout**: 10 USDC
+- **House Edge**: ~9%
 
-### Price Dynamics
+### Withdrawal Cooldown
+
+To prevent front-running (LP sees winning reveal → tries to withdraw):
 
 ```
-Swap Price = USDC Reserves / CREDITS Reserves
+Request Withdrawal → 5 min cooldown → 24hr window to execute → expires
 ```
 
-The swap price is determined **only by reserves**, not by the excess. This means:
+If you don't execute within the window, request expires and you keep your HOUSE tokens.
 
-1. **Gambling wins don't immediately tank the price** - they drain from excess first
-2. **Gambling losses accumulate in excess** - then overflow to reserves, appreciating CREDITS
-3. **The house edge compounds** - over time, CREDITS should appreciate as the house profits
+### Effective Pool
 
-## Contracts
-
-### Credits.sol
-
-An ERC-20 token with EIP-3009 support for gasless meta-transactions:
-
-- `transferWithAuthorization()` - Transfer tokens with a signed message
-- `receiveWithAuthorization()` - Pull tokens with holder's signature
-- Owner can `mint()` and `burn()`
-
-### CreditsDex.sol
-
-The hybrid DEX + Casino contract:
-
-#### DEX Functions
-
-- `init(credits, usdcReserves, usdcExcess)` - Initialize with reserves + house buffer
-- `assetToCredit(amount, minOut)` - Swap USDC → CREDITS
-- `creditToAsset(amount, minOut)` - Swap CREDITS → USDC
-- `deposit(creditAmount)` - Provide LP (at total pool ratio)
-- `withdraw(lpAmount)` - Remove LP (proportional share of everything)
-
-#### Gambling Functions
-
-- `roll()` - Pay 1 USDC for ~9% chance to win 10 USDC (~9% house edge)
-
-#### View Functions
-
-- `getUsdcReserves()` - USDC in reserves (for pricing)
-- `getExcess()` - USDC in house buffer
-- `getTotalUsdc()` - Total USDC (reserves + excess)
-- `creditInPrice(amount)` / `assetInPrice(amount)` - Quote swap prices
-
-## LP Economics
-
-**LPs get a raw deal compared to simple token holders.** Here's the honest breakdown:
-
-When you provide liquidity:
-
-1. **Deposit ratio** = Total pool (reserves + excess) / CREDITS
-2. **Your USDC** fills excess first, then overflows to reserves
-3. **If excess is full**, all your USDC goes to reserves → **price increases**
-
-When you withdraw:
-
-1. You receive **proportional share** of reserves + excess
-2. Excess is reduced proportionally
-3. Price stays stable
-
-### The Tradeoff
-
-| Role                        | What You Get                                | What You Risk                           |
-| --------------------------- | ------------------------------------------- | --------------------------------------- |
-| **CREDITS holder** (non-LP) | Token appreciation when house profits       | Token depreciation if reserves depleted |
-| **LP**                      | 0.3% swap fees + proportional share of pool | Your capital IS the house bankroll      |
-
-**The catch:** LPs are literally funding the gambling buffer. When the house wins, profits sit in excess (which LPs own proportionally) and eventually overflow to reserves (appreciating CREDITS). But LPs provided that capital in the first place - they're not getting "free" exposure to casino profits, they're taking the risk.
-
-**Why LP anyway?**
-
-- Swap fees (0.3% on every trade)
-- In the long run, the 9% house edge should grow the pool
-- Your USDC share grows as the house profits
-- CREDITS token price appreciation benefits everyone
-
-## Gambling Mechanics
-
-### Current Implementation (Gameable - Testing Only!)
+The contract tracks "effective pool" - total USDC minus pending withdrawals:
 
 ```solidity
-function roll() external returns (bool won) {
-    // Pay 1 USDC
-    assetToken.transferFrom(msg.sender, address(this), ROLL_COST);
-    _processRollPayment(ROLL_COST);  // → fills excess first
-
-    // Gameable randomness (DO NOT USE IN PRODUCTION)
-    uint256 random = uint256(blockhash(block.number - 1));
-    won = (random % 11) == 0;  // ~9% win rate
-
-    if (won) {
-        _processWinPayout(ROLL_PAYOUT);  // → drains excess first
-        assetToken.transfer(msg.sender, ROLL_PAYOUT);  // 10 USDC
-    }
-}
+effectivePool = totalPool - (pendingWithdrawals value)
+canRoll = effectivePool >= MIN_RESERVE + MAX_PAYOUT
 ```
 
-**Math:**
+Gambling is blocked if effective pool is too low.
 
-- Cost: 1 USDC
-- Win probability: 1/11 ≈ 9.09%
-- Payout: 10 USDC
-- Expected value: 0.909 USDC
-- **House edge: ~9.1%**
+### Auto Buyback & Burn (Optional)
 
-⚠️ **Warning:** Uses `blockhash` for randomness - easily gameable by miners/validators. Will be replaced with Chainlink VRF or similar for production.
+When the pool exceeds a threshold (150 USDC), the contract can automatically:
 
-## Example Scenarios
+1. Buy HOUSE tokens from Uniswap
+2. Burn them
 
-### Scenario 1: House Profits
+This keeps Uniswap price synced and makes HOUSE deflationary.
 
-```
-Initial: 1000 USDC reserves + 100 USDC excess + 100,000 CREDITS
-Price: 1000/100,000 = 0.01 USDC per CREDIT
+## Contract: HousePool.sol
 
-10 players roll, all lose (10 USDC collected)
-→ Excess tries to add 10 USDC but already at cap
-→ 10 USDC overflows to reserves
+Single contract that handles everything:
 
-After: 1010 USDC reserves + 100 USDC excess + 100,000 CREDITS
-Price: 1010/100,000 = 0.0101 USDC per CREDIT (+1%)
-```
+### LP Functions
 
-### Scenario 2: House Pays Out (Protected)
+- `deposit(usdcAmount)` - Deposit USDC, receive HOUSE shares
+- `requestWithdrawal(shares)` - Start 5 min cooldown
+- `withdraw()` - Execute within 24hr window
+- `cancelWithdrawal()` - Cancel pending request
+- `cleanupExpiredWithdrawal(address)` - Anyone can clear expired requests
 
-```
-Initial: 1000 USDC reserves + 100 USDC excess + 100,000 CREDITS
-Price: 0.01 USDC per CREDIT
+### Gambling Functions
 
-1 player rolls and wins 10 USDC
-→ 1 USDC payment → excess (now 101, caps at 100, 1 → reserves)
-→ 10 USDC payout from excess
+- `commitRoll(hash)` - Pay 1 USDC, commit hash of secret
+- `revealRoll(secret)` - After 2+ blocks, reveal to get result
 
-After: 1001 USDC reserves + 90 USDC excess + 100,000 CREDITS
-Price: 1001/100,000 = 0.01001 USDC per CREDIT (barely changed!)
-```
+### View Functions
 
-### Scenario 3: Excess Depleted (Price Impact)
+- `totalPool()` - Total USDC in contract
+- `effectivePool()` - Pool minus pending withdrawal value
+- `sharePrice()` - Current USDC per HOUSE (18 decimal precision)
+- `canRoll()` - Whether gambling is currently enabled
+- `usdcValue(address)` - USDC value of an LP's holdings
 
-```
-Initial: 1000 USDC reserves + 10 USDC excess + 100,000 CREDITS
-Price: 0.01 USDC per CREDIT
+### Owner Functions
 
-1 player rolls and wins 10 USDC
-→ 1 USDC payment → excess (now 11)
-→ 10 USDC payout: 11 from excess (depletes it) + need 0 more from reserves
+- `mintForLiquidity(to, amount)` - One-time mint to seed Uniswap
+- `setUniswapRouter(address)` - Configure Uniswap for buybacks
 
-After: 1001 USDC reserves + 1 USDC excess + 100,000 CREDITS
-Price: 1001/100,000 = 0.01001 (still protected!)
+## Constants
 
-If excess was 0 and player won:
-→ Full 10 USDC comes from reserves
-→ Price drops more significantly
-```
+| Constant          | Value     | Description                |
+| ----------------- | --------- | -------------------------- |
+| ROLL_COST         | 1 USDC    | Cost to roll               |
+| ROLL_PAYOUT       | 10 USDC   | Win payout                 |
+| WIN_MODULO        | 11        | 1/11 win chance            |
+| MIN_RESERVE       | 100 USDC  | Minimum pool for payouts   |
+| BUYBACK_THRESHOLD | 150 USDC  | Trigger buyback above this |
+| WITHDRAWAL_DELAY  | 5 minutes | Cooldown before withdrawal |
+| WITHDRAWAL_WINDOW | 24 hours  | Time to execute withdrawal |
 
 ## Quickstart
 
@@ -242,29 +149,23 @@ yarn deploy
 yarn start
 ```
 
-Visit `http://localhost:3000` to interact with the DEX and gambling features.
+Visit `http://localhost:3000` to interact with the House Pool.
 
 ## Testing
 
 ```bash
-yarn foundry:test
+cd packages/foundry
+forge test --match-contract HousePoolTest -vv
 ```
 
 Tests cover:
 
-- Excess pool initialization and caps
-- Swap pricing (uses reserves only)
-- LP deposits (fill excess first, overflow to reserves)
-- LP withdrawals (proportional from total pool)
-- Roll function (win/loss scenarios, excess drainage)
-
-## Future Improvements
-
-- [ ] Replace `blockhash` randomness with Chainlink VRF
-- [ ] Add more gambling games (blackjack, dice, etc.)
-- [ ] Configurable excess cap
-- [ ] Multi-token gambling (pay with CREDITS?)
-- [ ] Governance for house parameters
+- Deposit/withdraw mechanics and share calculations
+- Withdrawal cooldown and expiry
+- Effective pool accounting
+- Commit-reveal gambling flow
+- Minimum reserve protections
+- Owner functions
 
 ## Architecture
 
@@ -272,20 +173,29 @@ Tests cover:
 packages/
 ├── foundry/
 │   ├── contracts/
-│   │   ├── Credits.sol      # ERC-20 + EIP-3009
-│   │   └── CreditsDex.sol   # DEX + Excess Pool + Gambling
+│   │   └── HousePool.sol     # Single contract: ERC20 + Gambling + LP
 │   ├── script/
 │   │   ├── Deploy.s.sol
-│   │   ├── DeployCredits.s.sol
-│   │   └── DeployCreditsDex.s.sol
+│   │   └── DeployHousePool.s.sol
 │   └── test/
-│       ├── Credits.t.sol
-│       └── CreditsDex.t.sol
+│       └── HousePool.t.sol
 └── nextjs/
     └── app/
-        ├── credits/         # Credits token UI
-        └── dex/             # DEX + gambling UI
+        ├── house/            # Main LP + gambling UI
+        └── page.tsx          # Landing page
 ```
+
+## Key Design Decisions
+
+1. **One token, not two**: HOUSE = LP token = house ownership. No separate "credit" token.
+
+2. **No AMM**: Share price is simply `totalUSDC / totalShares`. Trade on external DEXs if needed.
+
+3. **Commit-reveal gambling**: Prevents both miner manipulation and LP front-running.
+
+4. **Withdrawal cooldown + expiry**: 5 min wait, 24hr window. Prevents griefing (signaling but never withdrawing).
+
+5. **Effective pool accounting**: Pending withdrawals reduce available liquidity immediately.
 
 ## License
 
