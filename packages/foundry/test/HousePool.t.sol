@@ -221,11 +221,11 @@ contract HousePoolTest is Test {
     }
     
     function test_Withdraw_CannotDrainBelowMinReserve() public {
-        // Deposit enough to test MIN_RESERVE constraint (MIN_RESERVE = 5 USDC)
+        // Deposit enough to test MIN_RESERVE constraint (MIN_RESERVE = 30 USDC)
         vm.prank(lp1);
-        housePool.deposit(10 * 10**6); // 10 USDC total
+        housePool.deposit(50 * 10**6); // 50 USDC total
         
-        // Request withdrawal of 90% of shares (would leave 1 USDC, below MIN_RESERVE)
+        // Request withdrawal of 90% of shares (would leave 5 USDC, below MIN_RESERVE of 30)
         uint256 sharesToWithdraw = (housePool.balanceOf(lp1) * 9) / 10;
         vm.prank(lp1);
         housePool.requestWithdrawal(sharesToWithdraw);
@@ -233,7 +233,7 @@ contract HousePoolTest is Test {
         // Fast forward past cooldown but within window
         vm.warp(block.timestamp + 11);
         
-        // This would leave 1 USDC remaining which is below MIN_RESERVE (5 USDC)
+        // This would leave 5 USDC remaining which is below MIN_RESERVE (30 USDC)
         vm.prank(lp1);
         vm.expectRevert(HousePool.InsufficientPool.selector);
         housePool.withdraw();
@@ -455,7 +455,7 @@ contract HousePoolTest is Test {
         vm.prank(lp1);
         housePool.requestWithdrawal(mostShares);
         
-        // Effective pool should now be ~12 USDC, below MIN_RESERVE + ROLL_PAYOUT
+        // Effective pool should now be ~12 USDC, below MIN_RESERVE (30) + ROLL_PAYOUT (10) = 40
         assertTrue(housePool.effectivePool() < 110 * 10**6);
         
         // Should not be able to commit

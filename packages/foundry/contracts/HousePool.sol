@@ -49,7 +49,7 @@ contract HousePool is ERC20, Ownable {
     uint256 public constant WIN_MODULO = 11;        // 1/11 ≈ 9% win rate, 9% house edge
     
     // Pool thresholds
-    uint256 public constant MIN_RESERVE = 5e6;      // 5 USDC minimum after payout
+    uint256 public constant MIN_RESERVE = 30e6;     // 30 USDC minimum (covers 2 wins in a row)
     
     // Withdrawal timing
     uint256 public constant WITHDRAWAL_DELAY = 10 seconds;

@@ -118,7 +118,7 @@ Single contract that handles everything:
 | ROLL_COST         | 1 USDC     | Cost to roll               |
 | ROLL_PAYOUT       | 10 USDC    | Win payout                 |
 | WIN_MODULO        | 11         | 1/11 win chance            |
-| MIN_RESERVE       | 5 USDC     | Minimum pool for payouts   |
+| MIN_RESERVE       | 30 USDC    | Minimum pool for payouts   |
 | BUYBACK_THRESHOLD | 15 USDC    | Trigger buyback above this |
 | WITHDRAWAL_DELAY  | 10 seconds | Cooldown before withdrawal |
 | WITHDRAWAL_WINDOW | 1 minute   | Time to execute withdrawal |
