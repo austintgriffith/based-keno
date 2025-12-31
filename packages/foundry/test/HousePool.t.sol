@@ -427,6 +427,66 @@ contract HousePoolTest is Test {
         assertFalse(canCheck);
     }
     
+    function test_CleanupExpiredCommit_ForfeitsStake() public {
+        vm.prank(lp1);
+        housePool.deposit(200 * 10**6);
+        
+        bytes32 secret = bytes32("my_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        uint256 playerBalanceBefore = usdc.balanceOf(player1);
+        uint256 poolBefore = housePool.totalPool();
+        
+        vm.prank(player1);
+        housePool.commitRoll(commitment);
+        
+        // Player paid 1 USDC
+        assertEq(usdc.balanceOf(player1), playerBalanceBefore - 1 * 10**6);
+        assertEq(housePool.totalPool(), poolBefore + 1 * 10**6);
+        
+        // Advance 257 blocks (past the 256 block limit)
+        vm.roll(block.number + 257);
+        
+        uint256 playerBalanceAfterExpiry = usdc.balanceOf(player1);
+        uint256 poolAfterExpiry = housePool.totalPool();
+        
+        // Anyone can call cleanup
+        vm.prank(lp2);
+        housePool.cleanupExpiredCommit(player1);
+        
+        // Player should NOT get refund - stake stays in pool
+        assertEq(usdc.balanceOf(player1), playerBalanceAfterExpiry);
+        assertEq(housePool.totalPool(), poolAfterExpiry); // Pool unchanged
+        
+        // Commitment should be cleared
+        (bytes32 hash,,,) = housePool.getCommitment(player1);
+        assertEq(hash, bytes32(0));
+    }
+    
+    function test_CleanupExpiredCommit_TooEarly_Reverts() public {
+        vm.prank(lp1);
+        housePool.deposit(200 * 10**6);
+        
+        bytes32 secret = bytes32("my_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(player1);
+        housePool.commitRoll(commitment);
+        
+        // Try to cleanup too early (only 100 blocks)
+        vm.roll(block.number + 100);
+        
+        vm.prank(lp2);
+        vm.expectRevert(HousePool.TooEarly.selector);
+        housePool.cleanupExpiredCommit(player1);
+    }
+    
+    function test_CleanupExpiredCommit_NoCommitment_Reverts() public {
+        vm.prank(lp1);
+        vm.expectRevert(HousePool.NoCommitment.selector);
+        housePool.cleanupExpiredCommit(player1);
+    }
+    
     function test_RevealRoll_InvalidSecret_Reverts() public {
         vm.prank(lp1);
         housePool.deposit(200 * 10**6);

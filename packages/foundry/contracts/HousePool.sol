@@ -66,7 +66,7 @@ contract HousePool is ERC20, Ownable {
     event WithdrawalExpiredCleanup(address indexed lp, uint256 shares);
     event Withdraw(address indexed lp, uint256 sharesIn, uint256 usdcOut);
     event RollCommitted(address indexed player, bytes32 commitment);
-    event RollCancelled(address indexed player, uint256 refund);
+    event RollForfeited(address indexed player, uint256 amount);
     event RollRevealed(address indexed player, bool won, uint256 payout);
 
     /* ========== CONSTRUCTOR ========== */
@@ -205,20 +205,21 @@ contract HousePool is ERC20, Ownable {
         emit RollCommitted(msg.sender, commitHash);
     }
 
-    /// @notice Cancel expired commit and get refund (after 256 blocks)
-    function cancelCommit() external {
-        Commitment memory c = commits[msg.sender];
+    /// @notice Clean up expired commit (after 256 blocks) - stake is forfeited to house
+    /// @dev Anyone can call this to clean up expired commits. Player forfeits their stake.
+    /// @param player The player whose expired commit to clean up
+    function cleanupExpiredCommit(address player) external {
+        Commitment memory c = commits[player];
         
         if (c.blockNumber == 0) revert NoCommitment();
         if (block.number <= c.blockNumber + 256) revert TooEarly(); // Must wait for expiry
         
-        delete commits[msg.sender];
+        delete commits[player];
         
-        // Refund the roll cost
-        bool success = usdc.transfer(msg.sender, ROLL_COST);
-        if (!success) revert TransferFailed();
+        // Stake stays in pool - house wins by default
+        // No refund! You snooze, you lose.
         
-        emit RollCancelled(msg.sender, ROLL_COST);
+        emit RollForfeited(player, ROLL_COST);
     }
     
     /// @notice Step 2: Reveal secret after 1+ block, within 256 blocks

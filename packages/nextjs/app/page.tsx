@@ -239,7 +239,9 @@ const Home: NextPage = () => {
     setPendingSecret(null);
     localStorage.removeItem("pendingGamblingSecret");
     setGamblingSecret("");
-    alert("Commit reset! If you had a pending on-chain commit, wait 256 blocks to call cancelCommit for refund.");
+    alert(
+      "Local data cleared! If you have a pending on-chain commit, you MUST reveal within 256 blocks or forfeit your stake.",
+    );
   };
 
   // Check for pending secret on load
@@ -373,7 +375,7 @@ const Home: NextPage = () => {
 
                 {commitmentIsExpired ? (
                   <div className="bg-error/10 rounded-lg p-3 text-error text-sm">
-                    ⚠️ Commitment expired (256 blocks passed) - cancel for refund
+                    ⚠️ Commitment expired (256 blocks passed) - stake forfeited to house
                   </div>
                 ) : commitmentCanReveal ? (
                   pendingSecret ? (
@@ -458,20 +460,22 @@ const Home: NextPage = () => {
             )}
 
             {commitmentIsExpired && (
-              <button
-                className="btn btn-warning w-full"
-                onClick={async () => {
-                  try {
-                    await writeHousePool({ functionName: "cancelCommit" });
+              <div className="bg-error/20 border border-error/40 rounded-xl p-4 text-center">
+                <div className="text-3xl mb-2">💸</div>
+                <p className="text-error font-bold">Commitment Expired</p>
+                <p className="text-sm text-base-content/60 mt-1">Your 1 USDC stake was forfeited to the house.</p>
+                <button
+                  className="btn btn-primary btn-sm mt-3"
+                  onClick={async () => {
+                    // Just clear local state and start fresh
+                    setPendingSecret(null);
+                    localStorage.removeItem("pendingGamblingSecret");
                     refetchAll();
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                disabled={isLoading}
-              >
-                Cancel & Get 1 USDC Refund
-              </button>
+                  }}
+                >
+                  Start Fresh
+                </button>
+              </div>
             )}
 
             <button className="btn btn-ghost btn-sm w-full text-error/60" onClick={handleResetCommit}>

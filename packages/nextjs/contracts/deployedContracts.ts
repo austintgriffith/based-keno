@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   8453: {
     HousePool: {
-      address: "0x7b5b04eb257d89ab732259e390a4474f54a47ce9",
+      address: "0x6474f1f682bd57b79e34e1cc65167434d70a0e12",
       abi: [
         {
           type: "constructor",
@@ -193,13 +193,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "cancelCommit",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "cancelWithdrawal",
           inputs: [],
           outputs: [],
@@ -233,6 +226,19 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "cleanupExpiredCommit",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -743,25 +749,6 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "RollCancelled",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "refund",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "RollCommitted",
           inputs: [
             {
@@ -775,6 +762,25 @@ const deployedContracts = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollForfeited",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -1088,7 +1094,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40181899,
+      deployedOnBlock: 40183121,
     },
   },
   31337: {
@@ -1279,13 +1285,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "cancelCommit",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "cancelWithdrawal",
           inputs: [],
           outputs: [],
@@ -1319,6 +1318,19 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "cleanupExpiredCommit",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -1829,25 +1841,6 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "RollCancelled",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "refund",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "RollCommitted",
           inputs: [
             {
@@ -1861,6 +1854,25 @@ const deployedContracts = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollForfeited",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
