@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../contracts/HousePool.sol";
-import "../contracts/DiceGame.sol";
+import "../contracts/BasedKeno.sol";
 import "../contracts/VaultManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -70,11 +70,12 @@ contract MockFleetCommander is ERC20 {
 
 contract HousePoolTest is Test {
     HousePool public housePool;
-    DiceGame public diceGame;
+    BasedKeno public basedKeno;
     VaultManager public vaultManager;
     MockUSDC public usdc;
     MockFleetCommander public mockVault;
     
+    address public dealer = address(1);
     address public lp1 = address(2);
     address public lp2 = address(3);
     address public player1 = address(4);
@@ -89,10 +90,10 @@ contract HousePoolTest is Test {
         // Deploy mock FleetCommander vault
         mockVault = new MockFleetCommander(address(usdc));
         
-        // Deploy DiceGame (which deploys VaultManager and HousePool internally)
-        diceGame = new DiceGame(address(usdc), address(mockVault));
-        housePool = diceGame.housePool();
-        vaultManager = diceGame.vaultManager();
+        // Deploy BasedKeno (which deploys VaultManager and HousePool internally)
+        basedKeno = new BasedKeno(address(usdc), address(mockVault), dealer);
+        housePool = basedKeno.housePool();
+        vaultManager = basedKeno.vaultManager();
         
         // Distribute USDC to test accounts
         usdc.mint(lp1, INITIAL_USDC);
@@ -118,12 +119,12 @@ contract HousePoolTest is Test {
     /* ========== DEPLOYMENT TESTS ========== */
     
     function test_Deployment() public view {
-        assertEq(address(housePool.game()), address(diceGame));
+        assertEq(address(housePool.game()), address(basedKeno));
         assertEq(address(housePool.usdc()), address(usdc));
         assertEq(address(housePool.vaultManager()), address(vaultManager));
-        assertEq(address(diceGame.housePool()), address(housePool));
-        assertEq(address(diceGame.usdc()), address(usdc));
-        assertEq(address(diceGame.vaultManager()), address(vaultManager));
+        assertEq(address(basedKeno.housePool()), address(housePool));
+        assertEq(address(basedKeno.usdc()), address(usdc));
+        assertEq(address(basedKeno.vaultManager()), address(vaultManager));
         assertEq(vaultManager.housePool(), address(housePool));
     }
 
@@ -363,32 +364,6 @@ contract HousePoolTest is Test {
         assertEq(housePool.totalPool(), 100 * 10**6);
     }
     
-    function test_VaultWithdraw_OnPayout() public {
-        // Deposit 100 USDC (all goes to vault)
-        vm.prank(lp1);
-        housePool.deposit(100 * 10**6);
-        
-        assertEq(housePool.vaultPool(), 100 * 10**6);
-        
-        // Player commits to use pool (adds 0.1 USDC)
-        bytes32 secret = bytes32("test_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
-        
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        vm.roll(block.number + 2);
-        
-        // If player wins, needs to payout 1 USDC from vault
-        vm.prank(player1);
-        bool won = diceGame.revealRoll(secret);
-        
-        if (won) {
-            // Pool should have paid out from vault
-            assertLt(housePool.totalPool(), 100 * 10**6 + diceGame.ROLL_COST());
-        }
-    }
-    
     function test_VaultYield_IncreasesSharePrice() public {
         // Deposit 100 USDC (all goes to vault)
         vm.prank(lp1);
@@ -512,15 +487,16 @@ contract HousePoolTest is Test {
     }
 }
 
-/* ========== DICE GAME TESTS ========== */
+/* ========== BASED KENO TESTS ========== */
 
-contract DiceGameTest is Test {
+contract BasedKenoTest is Test {
     HousePool public housePool;
-    DiceGame public diceGame;
+    BasedKeno public basedKeno;
     VaultManager public vaultManager;
     MockUSDC public usdc;
     MockFleetCommander public mockVault;
     
+    address public dealer = address(1);
     address public lp1 = address(2);
     address public player1 = address(4);
     address public player2 = address(5);
@@ -530,13 +506,14 @@ contract DiceGameTest is Test {
     function setUp() public {
         usdc = new MockUSDC();
         mockVault = new MockFleetCommander(address(usdc));
-        diceGame = new DiceGame(address(usdc), address(mockVault));
-        housePool = diceGame.housePool();
-        vaultManager = diceGame.vaultManager();
+        basedKeno = new BasedKeno(address(usdc), address(mockVault), dealer);
+        housePool = basedKeno.housePool();
+        vaultManager = basedKeno.vaultManager();
         
         usdc.mint(lp1, INITIAL_USDC);
         usdc.mint(player1, INITIAL_USDC);
         usdc.mint(player2, INITIAL_USDC);
+        usdc.mint(dealer, INITIAL_USDC);
         
         // LPs approve HousePool for deposits
         vm.prank(lp1);
@@ -550,256 +527,275 @@ contract DiceGameTest is Test {
         usdc.approve(address(housePool), type(uint256).max);
     }
     
-    function test_CommitRoll() public {
-        // Setup: LP deposits enough for gambling
+    function test_PlaceBet_StartsRound() public {
+        // Setup: LP deposits enough for gambling (need 2500 USDC per 1 USDC bet due to 2500x max multiplier)
         vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        housePool.deposit(5000 * 10**6);
         
-        bytes32 secret = bytes32("my_secret_123");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        uint8[] memory picks = new uint8[](3);
+        picks[0] = 5;
+        picks[1] = 10;
+        picks[2] = 15;
         
         vm.prank(player1);
-        diceGame.commitRoll(commitment);
+        uint256 cardId = basedKeno.placeBet(picks, 1 * 10**6);
         
-        (bytes32 hash, uint256 blockNum, bool canReveal, bool isExpired) = 
-            diceGame.getCommitment(player1);
+        assertEq(cardId, 0); // First card
         
-        assertEq(hash, commitment);
-        assertEq(blockNum, block.number);
-        assertFalse(canReveal); // Can't reveal same block
-        assertFalse(isExpired);
-        
-        // USDC transferred to pool (deposit + roll cost)
-        assertEq(housePool.totalPool(), 200 * 10**6 + diceGame.ROLL_COST());
+        (uint256 roundId, BasedKeno.RoundPhase phase,,,,,,, ) = basedKeno.getCurrentRound();
+        assertEq(roundId, 0);
+        assertTrue(phase == BasedKeno.RoundPhase.Open);
     }
     
-    function test_CommitRoll_InsufficientPool_Reverts() public {
-        // No deposits - pool is empty
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+    function test_PlaceBet_InvalidNumbers_Reverts() public {
+        vm.prank(lp1);
+        housePool.deposit(1000 * 10**6);
         
+        // Test: empty array
+        uint8[] memory emptyPicks = new uint8[](0);
         vm.prank(player1);
-        vm.expectRevert(DiceGame.GameNotPlayable.selector);
-        diceGame.commitRoll(commitment);
+        vm.expectRevert(BasedKeno.InvalidNumberCount.selector);
+        basedKeno.placeBet(emptyPicks, 1 * 10**6);
+        
+        // Test: too many picks (11)
+        uint8[] memory tooMany = new uint8[](11);
+        for (uint8 i = 0; i < 11; i++) {
+            tooMany[i] = i + 1;
+        }
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.InvalidNumberCount.selector);
+        basedKeno.placeBet(tooMany, 1 * 10**6);
+        
+        // Test: number out of range (0)
+        uint8[] memory zeroNum = new uint8[](1);
+        zeroNum[0] = 0;
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.InvalidNumber.selector);
+        basedKeno.placeBet(zeroNum, 1 * 10**6);
+        
+        // Test: number out of range (81)
+        uint8[] memory highNum = new uint8[](1);
+        highNum[0] = 81;
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.InvalidNumber.selector);
+        basedKeno.placeBet(highNum, 1 * 10**6);
+        
+        // Test: not sorted
+        uint8[] memory unsorted = new uint8[](2);
+        unsorted[0] = 10;
+        unsorted[1] = 5;
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.NumbersNotSorted.selector);
+        basedKeno.placeBet(unsorted, 1 * 10**6);
+        
+        // Test: duplicates
+        uint8[] memory dupes = new uint8[](2);
+        dupes[0] = 5;
+        dupes[1] = 5;
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.DuplicateNumber.selector);
+        basedKeno.placeBet(dupes, 1 * 10**6);
     }
     
-    function test_RevealRoll_TooEarly_Reverts() public {
+    function test_PlaceBet_BetTooSmall_Reverts() public {
         vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        housePool.deposit(1000 * 10**6);
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        uint8[] memory picks = new uint8[](1);
+        picks[0] = 1;
         
         vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        // Try to reveal in same block - should fail
-        vm.prank(player1);
-        vm.expectRevert(DiceGame.TooEarly.selector);
-        diceGame.revealRoll(secret);
+        vm.expectRevert(BasedKeno.BetTooSmall.selector);
+        basedKeno.placeBet(picks, 1000); // Less than MIN_BET
     }
     
-    function test_RevealRoll_AfterOneBlock_Success() public {
+    function test_PlaceBet_BetTooLarge_Reverts() public {
         vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        housePool.deposit(100 * 10**6); // Only 100 USDC
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        uint8[] memory picks = new uint8[](1);
+        picks[0] = 1;
+        
+        // Max bet = 100 USDC / 2500 = 0.04 USDC
+        // Try to bet 1 USDC - should fail
+        vm.prank(player1);
+        vm.expectRevert(BasedKeno.BetTooLarge.selector);
+        basedKeno.placeBet(picks, 1 * 10**6);
+    }
+    
+    function test_CommitRound_OnlyDealer() public {
+        vm.prank(lp1);
+        housePool.deposit(5000 * 10**6);
+        
+        // Place a bet to start round
+        uint8[] memory picks = new uint8[](1);
+        picks[0] = 1;
+        vm.prank(player1);
+        basedKeno.placeBet(picks, 1 * 10**6);
+        
+        // Advance past betting period
+        vm.roll(block.number + 31);
+        
+        // Non-dealer should fail
+        bytes32 secret = bytes32("dealer_secret");
+        bytes32 commitHash = keccak256(abi.encodePacked(secret));
         
         vm.prank(player1);
-        diceGame.commitRoll(commitment);
+        vm.expectRevert(BasedKeno.NotDealer.selector);
+        basedKeno.commitRound(commitHash);
         
-        // Advance 1 block - should now work
+        // Dealer should succeed
+        vm.prank(dealer);
+        basedKeno.commitRound(commitHash);
+    }
+    
+    function test_CommitRound_TooEarly_Reverts() public {
+        vm.prank(lp1);
+        housePool.deposit(5000 * 10**6);
+        
+        uint8[] memory picks = new uint8[](1);
+        picks[0] = 1;
+        vm.prank(player1);
+        basedKeno.placeBet(picks, 1 * 10**6);
+        
+        // Don't advance blocks - still in betting period
+        bytes32 secret = bytes32("dealer_secret");
+        bytes32 commitHash = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(dealer);
+        vm.expectRevert(BasedKeno.BettingPeriodNotOver.selector);
+        basedKeno.commitRound(commitHash);
+    }
+    
+    function test_FullRound_CommitReveal() public {
+        vm.prank(lp1);
+        housePool.deposit(5000 * 10**6);
+        
+        // Place bet
+        uint8[] memory picks = new uint8[](3);
+        picks[0] = 1;
+        picks[1] = 2;
+        picks[2] = 3;
+        vm.prank(player1);
+        uint256 cardId = basedKeno.placeBet(picks, 1 * 10**6);
+        
+        // Advance past betting period
+        vm.roll(block.number + 31);
+        
+        // Dealer commits
+        bytes32 secret = bytes32("dealer_secret");
+        bytes32 commitHash = keccak256(abi.encodePacked(secret));
+        vm.prank(dealer);
+        basedKeno.commitRound(commitHash);
+        
+        // Advance 1 block for reveal
         vm.roll(block.number + 1);
         
-        vm.prank(player1);
-        diceGame.revealRoll(secret); // Should succeed
+        // Dealer reveals
+        vm.prank(dealer);
+        basedKeno.revealRound(secret);
         
-        // Commitment should be cleared
-        (bytes32 hash,,,) = diceGame.getCommitment(player1);
-        assertEq(hash, bytes32(0));
-    }
-    
-    function test_RevealRoll_Success() public {
-        vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        // Check round state
+        (uint256 roundId, BasedKeno.RoundPhase phase,,,,,,,) = basedKeno.getCurrentRound();
+        assertEq(roundId, 1); // Advanced to next round
+        assertTrue(phase == BasedKeno.RoundPhase.Idle);
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        // Get winning numbers from round 0
+        uint8[20] memory winners = basedKeno.getWinningNumbers(0);
         
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        // Advance 2 blocks
-        vm.roll(block.number + 2);
-        
-        uint256 poolBefore = housePool.totalPool();
-        
-        vm.prank(player1);
-        bool won = diceGame.revealRoll(secret);
-        
-        // Commitment should be cleared
-        (bytes32 hash,,,) = diceGame.getCommitment(player1);
-        assertEq(hash, bytes32(0));
-        
-        // Pool should change based on win/loss
-        if (won) {
-            assertEq(housePool.totalPool(), poolBefore - diceGame.ROLL_PAYOUT()); // 1 USDC payout
-        } else {
-            assertEq(housePool.totalPool(), poolBefore); // No change (already received 0.1 USDC)
+        // Verify 20 unique numbers between 1-80
+        uint256 bitmap = 0;
+        for (uint256 i = 0; i < 20; i++) {
+            assertTrue(winners[i] >= 1 && winners[i] <= 80, "Number out of range");
+            uint256 bit = 1 << (winners[i] - 1);
+            assertTrue((bitmap & bit) == 0, "Duplicate number found");
+            bitmap |= bit;
         }
+        
+        // Claim winnings (might be 0 if no hits)
+        vm.prank(player1);
+        basedKeno.claimWinnings(0, cardId);
     }
     
-    function test_RevealRoll_TooLate_Reverts() public {
+    function test_RevealRound_InvalidSecret_Reverts() public {
         vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        housePool.deposit(5000 * 10**6);
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
-        
+        uint8[] memory picks = new uint8[](1);
+        picks[0] = 1;
         vm.prank(player1);
-        diceGame.commitRoll(commitment);
+        basedKeno.placeBet(picks, 1 * 10**6);
         
-        // Advance 257 blocks (past the 256 block limit)
-        vm.roll(block.number + 257);
+        vm.roll(block.number + 31);
         
-        vm.prank(player1);
-        vm.expectRevert(DiceGame.TooLate.selector);
-        diceGame.revealRoll(secret);
-    }
-    
-    function test_CheckRoll() public {
-        vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        bytes32 secret = bytes32("dealer_secret");
+        bytes32 commitHash = keccak256(abi.encodePacked(secret));
+        vm.prank(dealer);
+        basedKeno.commitRound(commitHash);
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
-        
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        // Can't check in same block
-        (bool canCheck, bool isWinner) = diceGame.checkRoll(player1, secret);
-        assertFalse(canCheck);
-        
-        // Advance 1 block
         vm.roll(block.number + 1);
         
-        // Now can check
-        (canCheck, isWinner) = diceGame.checkRoll(player1, secret);
-        assertTrue(canCheck);
-        
-        // Wrong secret returns false for canCheck
-        (canCheck, ) = diceGame.checkRoll(player1, bytes32("wrong"));
-        assertFalse(canCheck);
-        
-        // Verify checkRoll matches actual reveal result
-        vm.prank(player1);
-        bool actualWon = diceGame.revealRoll(secret);
-        assertEq(isWinner, actualWon);
+        // Wrong secret
+        vm.prank(dealer);
+        vm.expectRevert(BasedKeno.InvalidReveal.selector);
+        basedKeno.revealRound(bytes32("wrong_secret"));
     }
     
-    function test_CheckRoll_TooLate() public {
-        vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+    function test_GetPayoutMultiplier() public view {
+        // Pick 1, hit 1 = 3.8x (38 scaled)
+        assertEq(basedKeno.getPayoutMultiplier(1, 1), 38);
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        // Pick 2, hit 2 = 15x (150 scaled)
+        assertEq(basedKeno.getPayoutMultiplier(2, 2), 150);
         
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
+        // Pick 10, hit 10 = 2500x (25000 scaled)
+        assertEq(basedKeno.getPayoutMultiplier(10, 10), 25000);
         
-        // Advance 257 blocks
-        vm.roll(block.number + 257);
+        // Pick 10, hit 0 = 20x (200 scaled) - catch zero payout
+        assertEq(basedKeno.getPayoutMultiplier(10, 0), 200);
         
-        // Can't check anymore (blockhash is 0)
-        (bool canCheck, ) = diceGame.checkRoll(player1, secret);
-        assertFalse(canCheck);
+        // Invalid: more hits than picks
+        assertEq(basedKeno.getPayoutMultiplier(5, 6), 0);
     }
     
-    function test_RevealRoll_InvalidSecret_Reverts() public {
+    function test_MaxBet() public {
         vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        housePool.deposit(2500 * 10**6); // 2500 USDC
         
-        bytes32 secret = bytes32("my_secret");
-        bytes32 wrongSecret = bytes32("wrong_secret");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
-        
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        vm.roll(block.number + 2);
-        
-        vm.prank(player1);
-        vm.expectRevert(DiceGame.InvalidReveal.selector);
-        diceGame.revealRoll(wrongSecret);
+        // Max bet = pool / 2500 = 1 USDC
+        assertEq(basedKeno.maxBet(), 1 * 10**6);
     }
     
-    function test_CommitRoll_BlockedByPendingWithdrawals() public {
-        // Deposit just above minimum threshold (MIN_RESERVE + ROLL_PAYOUT)
-        uint256 minRequired = diceGame.MIN_RESERVE() + diceGame.ROLL_PAYOUT();
+    function test_MultipleBetsPerRound() public {
         vm.prank(lp1);
-        housePool.deposit(minRequired + 1 * 10**6); // Just above threshold
+        housePool.deposit(10000 * 10**6);
         
-        // Request withdrawal of most of it (99%)
-        uint256 mostShares = (housePool.balanceOf(lp1) * 99) / 100;
-        vm.prank(lp1);
-        housePool.requestWithdrawal(mostShares);
+        // Player 1 places multiple bets
+        uint8[] memory picks1 = new uint8[](3);
+        picks1[0] = 1;
+        picks1[1] = 2;
+        picks1[2] = 3;
         
-        // Effective pool should now be below threshold
-        assertTrue(housePool.effectivePool() < minRequired);
+        uint8[] memory picks2 = new uint8[](5);
+        picks2[0] = 10;
+        picks2[1] = 20;
+        picks2[2] = 30;
+        picks2[3] = 40;
+        picks2[4] = 50;
         
-        // Should not be able to commit
-        bytes32 commitment = keccak256(abi.encodePacked(bytes32("secret")));
-        vm.prank(player1);
-        vm.expectRevert(DiceGame.GameNotPlayable.selector);
-        diceGame.commitRoll(commitment);
-    }
-    
-    function test_CanPlay() public {
-        // Empty pool - can't play
-        assertFalse(diceGame.canPlay());
+        vm.startPrank(player1);
+        uint256 card1 = basedKeno.placeBet(picks1, 1 * 10**6);
+        uint256 card2 = basedKeno.placeBet(picks2, 2 * 10**6);
+        vm.stopPrank();
         
-        // Deposit enough
-        vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
+        assertEq(card1, 0);
+        assertEq(card2, 1);
         
-        assertTrue(diceGame.canPlay());
-    }
-
-    /* ========== SHARE VALUE CONSISTENCY TESTS ========== */
-    
-    function test_ShareValue_PreservedAfterGamblingLoss() public {
-        // LP deposits 200 USDC
-        vm.prank(lp1);
-        housePool.deposit(200 * 10**6);
-        
-        uint256 valueBeforeGambling = housePool.usdcValue(lp1);
-        
-        // Player commits and plays
-        bytes32 secret = bytes32("will_probably_lose");
-        bytes32 commitment = keccak256(abi.encodePacked(secret));
-        
-        vm.prank(player1);
-        diceGame.commitRoll(commitment);
-        
-        vm.roll(block.number + 2);
-        
-        vm.prank(player1);
-        bool won = diceGame.revealRoll(secret);
-        
-        uint256 valueAfterGambling = housePool.usdcValue(lp1);
-        
-        uint256 rollCost = diceGame.ROLL_COST();
-        uint256 rollPayout = diceGame.ROLL_PAYOUT();
-        
-        if (won) {
-            // Pool decreased by net payout (payout - cost)
-            assertEq(valueAfterGambling, valueBeforeGambling - (rollPayout - rollCost));
-        } else {
-            // Pool increased by roll cost
-            assertEq(valueAfterGambling, valueBeforeGambling + rollCost);
-        }
+        // Check player's cards
+        uint256[] memory playerCardIds = basedKeno.getPlayerCards(player1, 0);
+        assertEq(playerCardIds.length, 2);
+        assertEq(playerCardIds[0], 0);
+        assertEq(playerCardIds[1], 1);
     }
 }
 
@@ -809,7 +805,7 @@ contract VaultManagerTest is Test {
     VaultManager public vaultManager;
     MockUSDC public usdc;
     MockFleetCommander public mockVault;
-    address public housePool = address(0x1234);
+    address public housePoolAddr = address(0x1234);
     
     function setUp() public {
         usdc = new MockUSDC();
@@ -818,13 +814,13 @@ contract VaultManagerTest is Test {
     }
     
     function test_SetHousePool() public {
-        vaultManager.setHousePool(housePool);
-        assertEq(vaultManager.housePool(), housePool);
+        vaultManager.setHousePool(housePoolAddr);
+        assertEq(vaultManager.housePool(), housePoolAddr);
         assertTrue(vaultManager.housePoolSet());
     }
     
     function test_SetHousePool_OnlyOnce() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         
         vm.expectRevert(VaultManager.HousePoolAlreadySet.selector);
         vaultManager.setHousePool(address(0x5678));
@@ -836,12 +832,12 @@ contract VaultManagerTest is Test {
     }
     
     function test_DepositIntoVault() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         
         // Send USDC to vault manager
         usdc.mint(address(vaultManager), 100 * 10**6);
         
-        vm.prank(housePool);
+        vm.prank(housePoolAddr);
         uint256 shares = vaultManager.depositIntoVault(0);
         
         assertGt(shares, 0);
@@ -850,7 +846,7 @@ contract VaultManagerTest is Test {
     }
     
     function test_DepositIntoVault_Unauthorized() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         usdc.mint(address(vaultManager), 100 * 10**6);
         
         vm.prank(address(0x9999));
@@ -859,26 +855,26 @@ contract VaultManagerTest is Test {
     }
     
     function test_WithdrawFromVault() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         usdc.mint(address(vaultManager), 100 * 10**6);
         
-        vm.prank(housePool);
+        vm.prank(housePoolAddr);
         vaultManager.depositIntoVault(0);
         
-        vm.prank(housePool);
+        vm.prank(housePoolAddr);
         vaultManager.withdrawFromVault(50 * 10**6);
         
         // Should have withdrawn 50 USDC to housePool
-        assertEq(usdc.balanceOf(housePool), 50 * 10**6);
+        assertEq(usdc.balanceOf(housePoolAddr), 50 * 10**6);
         assertApproxEqAbs(vaultManager.getCurrentValue(), 50 * 10**6, 1);
     }
     
     function test_GetTotalValue() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         
         // Put 50 USDC in vault
         usdc.mint(address(vaultManager), 50 * 10**6);
-        vm.prank(housePool);
+        vm.prank(housePoolAddr);
         vaultManager.depositIntoVault(0);
         
         // Put 30 USDC directly in contract
@@ -888,12 +884,12 @@ contract VaultManagerTest is Test {
     }
     
     function test_EmergencyWithdraw() public {
-        vaultManager.setHousePool(housePool);
+        vaultManager.setHousePool(housePoolAddr);
         usdc.mint(address(vaultManager), 100 * 10**6);
         
         address recipient = address(0xBEEF);
         
-        vm.prank(housePool);
+        vm.prank(housePoolAddr);
         vaultManager.emergencyWithdraw(address(usdc), 50 * 10**6, recipient);
         
         assertEq(usdc.balanceOf(recipient), 50 * 10**6);

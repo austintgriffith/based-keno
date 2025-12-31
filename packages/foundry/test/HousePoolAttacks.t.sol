@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../contracts/HousePool.sol";
-import "../contracts/DiceGame.sol";
+import "../contracts/BasedKeno.sol";
 import "../contracts/VaultManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -64,11 +64,12 @@ contract MockFleetCommander is ERC20 {
 /// @dev These tests should PASS on vulnerable code, proving the attacks work
 contract HousePoolAttacksTest is Test {
     HousePool public housePool;
-    DiceGame public diceGame;
+    BasedKeno public basedKeno;
     VaultManager public vaultManager;
     MockUSDC public usdc;
     MockFleetCommander public mockVault;
     
+    address public dealer = address(1);
     address public attacker = address(0xBAD);
     address public victim = address(0xBEEF);
     address public lp1 = address(2);
@@ -83,10 +84,10 @@ contract HousePoolAttacksTest is Test {
         // Deploy mock FleetCommander vault
         mockVault = new MockFleetCommander(address(usdc));
         
-        // Deploy DiceGame (which deploys VaultManager and HousePool internally)
-        diceGame = new DiceGame(address(usdc), address(mockVault));
-        housePool = diceGame.housePool();
-        vaultManager = diceGame.vaultManager();
+        // Deploy BasedKeno (which deploys VaultManager and HousePool internally)
+        basedKeno = new BasedKeno(address(usdc), address(mockVault), dealer);
+        housePool = basedKeno.housePool();
+        vaultManager = basedKeno.vaultManager();
         
         // Distribute USDC to test accounts
         usdc.mint(attacker, INITIAL_USDC);
@@ -340,15 +341,13 @@ contract HousePoolAttacksTest is Test {
         console.log("=== EffectivePool Griefing Attack ===");
         
         // Step 1: Legitimate LP deposits enough for gameplay
-        uint256 lpDeposit = 10 * 10**6; // 10 USDC (just above MIN_RESERVE + ROLL_PAYOUT = 4 USDC)
+        uint256 lpDeposit = 10000 * 10**6; // 10000 USDC (enough for Keno max bet)
         vm.prank(lp1);
         housePool.deposit(lpDeposit);
         
         console.log("Step 1 - Legitimate LP deposits:");
         console.log("  Deposited:", lpDeposit, "USDC");
-        console.log("  canPlay():", diceGame.canPlay());
-        
-        assertTrue(diceGame.canPlay(), "Game should be playable");
+        console.log("  Max bet:", basedKeno.maxBet());
         
         // Step 2: Attacker deposits
         uint256 attackerDeposit = 100 * 10**6; // 100 USDC
@@ -358,22 +357,18 @@ contract HousePoolAttacksTest is Test {
         console.log("Step 2 - Attacker deposits:");
         console.log("  Deposited:", attackerDeposit, "USDC");
         console.log("  effectivePool():", housePool.effectivePool());
-        console.log("  canPlay():", diceGame.canPlay());
         
         // Step 3: Attacker requests withdrawal for ALL shares
         vm.prank(attacker);
         housePool.requestWithdrawal(attackerShares);
         
         uint256 effectivePoolAfter = housePool.effectivePool();
-        bool canPlayAfter = diceGame.canPlay();
         
         console.log("Step 3 - Attacker requests full withdrawal:");
         console.log("  totalPendingShares:", housePool.totalPendingShares());
         console.log("  effectivePool():", effectivePoolAfter);
-        console.log("  canPlay():", canPlayAfter);
         
-        // Game might still be playable if LP deposit is large enough
-        // Let's show the impact on effectivePool
+        // Game should still be playable because LP deposit is large enough
         uint256 totalPool = housePool.totalPool();
         console.log("  totalPool():", totalPool);
         console.log("  Pool 'locked' by attacker:", totalPool - effectivePoolAfter);

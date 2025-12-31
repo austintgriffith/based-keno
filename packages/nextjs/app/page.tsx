@@ -3,29 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { NextPage } from "next";
-import { decodeEventLog, formatUnits, keccak256, toHex } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { ArrowPathIcon, CubeIcon, HomeModernIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { formatUnits } from "viem";
+import { useAccount, useBlockNumber, useReadContract, useWriteContract } from "wagmi";
+import { HomeModernIcon } from "@heroicons/react/24/outline";
+import { BetPanel, CardData, KenoBoard, PlayerCards, RoundPhase, RoundStatus } from "~~/components/keno";
+import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals
 const USDC_DECIMALS = 6;
 
 // Base USDC address
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-
-// RollRevealed event ABI for decoding (from DiceGame)
-const rollRevealedAbi = [
-  {
-    type: "event",
-    name: "RollRevealed",
-    inputs: [
-      { name: "player", type: "address", indexed: true },
-      { name: "won", type: "bool", indexed: false },
-      { name: "payout", type: "uint256", indexed: false },
-    ],
-  },
-] as const;
 
 // USDC ABI for approve and balance
 const USDC_ABI = [
@@ -48,55 +36,125 @@ const USDC_ABI = [
   },
 ] as const;
 
-// HousePool ABI (minimal - only for effectivePool)
-const HOUSE_POOL_ABI = [
+// Constants from contract
+const BETTING_PERIOD_BLOCKS = 30;
+
+// BasedKeno ABI (minimal - for functions we need before deploy regenerates deployedContracts.ts)
+const BASED_KENO_ABI = [
   {
     inputs: [],
-    name: "effectivePool",
+    name: "housePool",
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "maxBet",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [],
+    name: "getCurrentRound",
+    outputs: [
+      { name: "roundId", type: "uint256" },
+      { name: "phase", type: "uint8" },
+      { name: "startBlock", type: "uint256" },
+      { name: "commitBlock", type: "uint256" },
+      { name: "totalCards", type: "uint256" },
+      { name: "totalBets", type: "uint256" },
+      { name: "canBet", type: "bool" },
+      { name: "canCommit", type: "bool" },
+      { name: "canRefund", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "roundId", type: "uint256" }],
+    name: "getWinningNumbers",
+    outputs: [{ name: "", type: "uint8[20]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "player", type: "address" },
+      { name: "roundId", type: "uint256" },
+    ],
+    name: "getPlayerCards",
+    outputs: [{ name: "", type: "uint256[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "numbers", type: "uint8[]" },
+      { name: "betAmount", type: "uint256" },
+    ],
+    name: "placeBet",
+    outputs: [{ name: "cardId", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "roundId", type: "uint256" },
+      { name: "cardId", type: "uint256" },
+    ],
+    name: "claimWinnings",
+    outputs: [{ name: "payout", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
+
+// Placeholder address until deployed - will be replaced by deployedContracts.ts
+const BASED_KENO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
 
-  // State for gambling
-  const [gamblingSecret, setGamblingSecret] = useState("");
-  const [pendingSecret, setPendingSecret] = useState<string | null>(null);
-  const [lastRollResult, setLastRollResult] = useState<{ won: boolean; payout: string } | null>(null);
-  const [revealTxHash, setRevealTxHash] = useState<`0x${string}` | undefined>(undefined);
+  // State for number selection
+  const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
+  const [isClaimingCard, setIsClaimingCard] = useState<bigint | null>(null);
+  const [playerCards, setPlayerCards] = useState<CardData[]>([]);
 
-  // Read HousePool address from DiceGame contract
-  const { data: housePoolAddress } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "housePool",
+  // Get current block number
+  const { data: blockNumber } = useBlockNumber({ watch: true });
+
+  // Get deployed contract addresses
+  const { data: housePoolContractInfo } = useDeployedContractInfo({ contractName: "HousePool" });
+  const housePoolAddress = housePoolContractInfo?.address;
+
+  // BasedKeno address - will be populated when contracts are deployed
+  // For now, we check if BasedKeno exists in deployed contracts
+  const { data: basedKenoContractInfo } = useDeployedContractInfo({
+    contractName: "BasedKeno" as "HousePool",
   });
+  const basedKenoAddress = basedKenoContractInfo?.address || BASED_KENO_ADDRESS;
 
-  // Read pool stats from HousePool using the dynamic address
-  const { data: effectivePool, refetch: refetchEffectivePool } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  // Read pool stats
+  const { data: effectivePool, refetch: refetchEffectivePool } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "effectivePool",
   });
 
-  // Read canPlay from DiceGame (replaces canRoll from HousePool)
-  const { data: canPlay, refetch: refetchCanPlay } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "canPlay",
+  // Read max bet
+  const { data: maxBetData, refetch: refetchMaxBet } = useReadContract({
+    address: basedKenoAddress as `0x${string}`,
+    abi: BASED_KENO_ABI,
+    functionName: "maxBet",
   });
 
-  // Read game parameters from contract (not hardcoded!)
-  const { data: rollCost } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "ROLL_COST",
-  });
-
-  const { data: rollPayout } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "ROLL_PAYOUT",
+  // Read current round info
+  const { data: currentRoundData, refetch: refetchCurrentRound } = useReadContract({
+    address: basedKenoAddress as `0x${string}`,
+    abi: BASED_KENO_ABI,
+    functionName: "getCurrentRound",
   });
 
   // Read user USDC balance
@@ -107,437 +165,291 @@ const Home: NextPage = () => {
     args: connectedAddress ? [connectedAddress] : undefined,
   });
 
-  // Read commitment from DiceGame
-  const { data: commitment, refetch: refetchCommitment } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "getCommitment",
-    args: [connectedAddress],
+  // Read player's cards for current round
+  const { data: playerCardIds, refetch: refetchPlayerCardIds } = useReadContract({
+    address: basedKenoAddress as `0x${string}`,
+    abi: BASED_KENO_ABI,
+    functionName: "getPlayerCards",
+    args: connectedAddress && currentRoundData ? [connectedAddress, currentRoundData[0]] : undefined,
   });
 
-  // Check roll result from DiceGame (only when we have a pending secret)
-  const { data: rollCheck, refetch: refetchRollCheck } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "checkRoll",
-    args: [connectedAddress, pendingSecret as `0x${string}` | undefined],
+  // Read winning numbers (only when round is revealed)
+  const roundId = currentRoundData ? currentRoundData[0] : 0n;
+
+  // For revealed rounds, get winning numbers from previous round
+  const { data: winningNumbersData } = useReadContract({
+    address: basedKenoAddress as `0x${string}`,
+    abi: BASED_KENO_ABI,
+    functionName: "getWinningNumbers",
+    args: roundId > 0n ? [roundId - 1n] : undefined,
   });
 
-  // Write hooks - DiceGame for gambling, USDC for approvals
-  const { writeContractAsync: writeDiceGame, isPending: isDiceGameWritePending } = useScaffoldWriteContract({
-    contractName: "DiceGame",
-  });
-
+  // Write hooks
+  const { writeContractAsync: writeBasedKeno, isPending: isBasedKenoWritePending } = useWriteContract();
   const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useWriteContract();
 
-  // Watch for reveal transaction receipt
-  const { data: revealReceipt } = useWaitForTransactionReceipt({
-    hash: revealTxHash,
-  });
+  // Parse round data
+  const currentRound = {
+    roundId: currentRoundData?.[0] ?? 0n,
+    phase: (currentRoundData?.[1] ?? 0) as RoundPhase,
+    startBlock: currentRoundData?.[2] ?? 0n,
+    commitBlock: currentRoundData?.[3] ?? 0n,
+    totalCards: currentRoundData?.[4] ?? 0n,
+    totalBets: currentRoundData?.[5] ?? 0n,
+    canBet: currentRoundData?.[6] ?? false,
+    canCommit: currentRoundData?.[7] ?? false,
+    canRefund: currentRoundData?.[8] ?? false,
+  };
 
-  // Parse RollRevealed event when receipt arrives
-  useEffect(() => {
-    if (revealReceipt) {
-      if (revealReceipt.logs.length > 0) {
-        for (let i = 0; i < revealReceipt.logs.length; i++) {
-          const log = revealReceipt.logs[i];
-          try {
-            const decoded = decodeEventLog({
-              abi: rollRevealedAbi,
-              data: log.data,
-              topics: log.topics,
-            });
-
-            if (decoded.eventName === "RollRevealed") {
-              const won = decoded.args.won;
-              const payout = decoded.args.payout;
-              const payoutUsdc = Number(payout) / 1e6;
-
-              setLastRollResult({
-                won,
-                payout: payoutUsdc.toFixed(2),
-              });
-              setRevealTxHash(undefined);
-              break;
-            }
-          } catch {
-            // Log decode failed, try next
-          }
-        }
-      }
-    }
-  }, [revealReceipt, revealTxHash]);
-
-  // Parse commitment (needed early for auto-refresh logic)
-  const hasCommitment =
-    commitment && commitment[0] !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  // Parse winning numbers (convert from fixed array to regular array)
+  const winningNumbers: number[] = winningNumbersData ? Array.from(winningNumbersData).filter(n => n > 0) : [];
 
   // Refetch all data
   const refetchAll = useCallback(() => {
     refetchEffectivePool();
-    refetchCanPlay();
+    refetchMaxBet();
+    refetchCurrentRound();
     refetchUserUsdcBalance();
-    refetchCommitment();
-    refetchRollCheck();
-  }, [refetchEffectivePool, refetchCanPlay, refetchUserUsdcBalance, refetchCommitment, refetchRollCheck]);
+    refetchPlayerCardIds();
+  }, [refetchEffectivePool, refetchMaxBet, refetchCurrentRound, refetchUserUsdcBalance, refetchPlayerCardIds]);
 
-  // Auto-refresh (faster when waiting for result)
+  // Auto-refresh data
   useEffect(() => {
-    const interval = setInterval(refetchAll, hasCommitment && pendingSecret ? 2000 : 10000);
+    const interval = setInterval(refetchAll, 5000);
     return () => clearInterval(interval);
-  }, [refetchAll, hasCommitment, pendingSecret]);
+  }, [refetchAll]);
 
-  // Generate random secret for gambling
-  const generateSecret = () => {
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const secret = toHex(randomBytes);
-    setGamblingSecret(secret);
-    return secret;
+  // Fetch card details when player card IDs change
+  useEffect(() => {
+    const fetchCardDetails = async () => {
+      if (!playerCardIds || playerCardIds.length === 0) {
+        setPlayerCards([]);
+        return;
+      }
+
+      const cards: CardData[] = [];
+      for (const cardId of playerCardIds) {
+        try {
+          // We need to call getCard for each card ID - using raw contract read
+          // For now, we'll just track the card IDs and show basic info
+          cards.push({
+            cardId,
+            numbers: [], // Will be filled in when we have more contract reads
+            betAmount: 0n,
+            claimed: false,
+          });
+        } catch (e) {
+          console.error("Error fetching card:", e);
+        }
+      }
+      setPlayerCards(cards);
+    };
+
+    fetchCardDetails();
+  }, [playerCardIds, currentRound.roundId]);
+
+  // Toggle number selection
+  const toggleNumber = (num: number) => {
+    setSelectedNumbers(prev => {
+      if (prev.includes(num)) {
+        return prev.filter(n => n !== num);
+      }
+      if (prev.length >= 10) return prev;
+      return [...prev, num].sort((a, b) => a - b);
+    });
   };
 
-  // Handle commit roll
-  const handleCommitRoll = async () => {
-    if (!housePoolAddress || !rollCost) return;
+  // Quick pick random numbers
+  const quickPick = () => {
+    const count = Math.floor(Math.random() * 6) + 5; // 5-10 numbers
+    const numbers: number[] = [];
+    while (numbers.length < count) {
+      const num = Math.floor(Math.random() * 80) + 1;
+      if (!numbers.includes(num)) {
+        numbers.push(num);
+      }
+    }
+    setSelectedNumbers(numbers.sort((a, b) => a - b));
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedNumbers([]);
+  };
+
+  // Place bet
+  const handlePlaceBet = async (amount: bigint) => {
+    if (!housePoolAddress || selectedNumbers.length === 0) return;
 
     try {
-      const secret = gamblingSecret || generateSecret();
-      const commitHash = keccak256(secret as `0x${string}`);
-
-      setPendingSecret(secret);
-      localStorage.setItem("pendingGamblingSecret", secret);
-
-      // Approve HousePool (DiceGame calls housePool.receivePayment which does transferFrom)
+      // Approve USDC
       await writeUsdc({
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: "approve",
-        args: [housePoolAddress, rollCost],
+        args: [housePoolAddress, amount],
       });
 
-      // Wait 3 seconds for approval to settle on-chain
       setIsWaitingForApproval(true);
       await new Promise(resolve => setTimeout(resolve, 3000));
       setIsWaitingForApproval(false);
 
-      // Call DiceGame.commitRoll (not HousePool)
-      await writeDiceGame({
-        functionName: "commitRoll",
-        args: [commitHash],
+      // Place bet - convert numbers to uint8 array
+      const numbersAsUint8 = selectedNumbers.map(n => n);
+
+      await writeBasedKeno({
+        address: basedKenoAddress as `0x${string}`,
+        abi: BASED_KENO_ABI,
+        functionName: "placeBet",
+        args: [numbersAsUint8, amount],
       });
 
-      setGamblingSecret("");
+      setSelectedNumbers([]);
       refetchAll();
     } catch (error) {
-      console.error("Commit roll failed:", error);
+      console.error("Place bet failed:", error);
       setIsWaitingForApproval(false);
     }
   };
 
-  // Handle reveal roll
-  const handleRevealRoll = async () => {
-    const secret = pendingSecret || localStorage.getItem("pendingGamblingSecret");
-    if (!secret) {
-      alert("No pending secret found. Please commit first.");
-      return;
-    }
-
-    if (!secret.startsWith("0x") || secret.length !== 66) {
-      alert(`Invalid secret format. Please reset and try again.`);
-      return;
-    }
+  // Claim winnings
+  const handleClaimCard = async (cardId: bigint) => {
+    if (!currentRound.roundId) return;
 
     try {
-      setLastRollResult(null);
+      setIsClaimingCard(cardId);
 
-      // Call DiceGame.revealRoll (not HousePool)
-      const hash = await writeDiceGame({
-        functionName: "revealRoll",
-        args: [secret as `0x${string}`],
+      // Claim from previous round (since current round advances after reveal)
+      const claimRoundId = currentRound.roundId > 0n ? currentRound.roundId - 1n : 0n;
+
+      await writeBasedKeno({
+        address: basedKenoAddress as `0x${string}`,
+        abi: BASED_KENO_ABI,
+        functionName: "claimWinnings",
+        args: [claimRoundId, cardId],
       });
 
-      setRevealTxHash(hash);
-
-      setPendingSecret(null);
-      localStorage.removeItem("pendingGamblingSecret");
       refetchAll();
     } catch (error) {
-      console.error("Reveal roll failed:", error);
+      console.error("Claim failed:", error);
+    } finally {
+      setIsClaimingCard(null);
     }
   };
 
-  // Reset pending commit
-  const handleResetCommit = () => {
-    setPendingSecret(null);
-    localStorage.removeItem("pendingGamblingSecret");
-    setGamblingSecret("");
-    alert(
-      "Local data cleared! If you have a pending on-chain commit, you MUST reveal within 256 blocks or forfeit your stake.",
-    );
-  };
-
-  // Check for pending secret on load
-  useEffect(() => {
-    const stored = localStorage.getItem("pendingGamblingSecret");
-    if (stored) {
-      setPendingSecret(stored);
-    }
-  }, []);
-
-  const isLoading = isDiceGameWritePending || isUsdcWritePending || isWaitingForApproval;
+  const isLoading = isBasedKenoWritePending || isUsdcWritePending || isWaitingForApproval;
 
   // Format helpers
   const formatUsdc = (value: bigint | undefined) =>
     value ? parseFloat(formatUnits(value, USDC_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0";
 
-  // Parse commitment details
-  const commitmentCanReveal = commitment && commitment[2];
-  const commitmentIsExpired = commitment && commitment[3];
-
-  // Parse roll check result
-  const canCheckRoll = rollCheck && rollCheck[0];
-  const isWinner = rollCheck && rollCheck[1];
+  // Determine if we should show results (from previous round)
+  const showResults = roundId > 0n && winningNumbers.length > 0;
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-base-300 via-base-100 to-base-100">
+    <div className="flex flex-col items-center min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-900/20 via-base-100 to-base-100">
       {/* Hero Section */}
-      <div className="flex flex-col items-center justify-center px-5 py-12 w-full">
+      <div className="flex flex-col items-center justify-center px-5 py-8 w-full">
         <h1 className="text-5xl font-black mb-2 tracking-tight">
-          <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
-            🎲 Roll the Dice
+          <span className="bg-gradient-to-r from-cyan-400 via-violet-500 to-fuchsia-500 bg-clip-text text-transparent">
+            🎱 Based Keno
           </span>
         </h1>
-        <p className="text-base-content/60 mb-6 text-center max-w-md">
-          Pay ${formatUsdc(rollCost)}, ~9% chance to win ${formatUsdc(rollPayout)}. Fair commit-reveal randomness.
+        <p className="text-base-content/60 mb-4 text-center max-w-md">
+          Pick up to 10 numbers. Match the 20 drawn to win up to 2500x your bet!
         </p>
-      </div>
 
-      {/* Player USDC Balance */}
-      {connectedAddress && (
-        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl px-8 py-4 mb-6 border border-green-500/20">
-          <div className="flex items-center gap-4">
-            <div className="text-3xl">💵</div>
-            <div>
-              <p className="text-sm text-base-content/60 uppercase tracking-wide">Your USDC</p>
-              <p className="text-3xl font-bold text-green-400">${formatUsdc(userUsdcBalance as bigint | undefined)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Game Stats Bar */}
-      <div className="flex gap-6 mb-8 text-center">
-        <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
-          <p className="text-xs text-base-content/50 uppercase">Cost</p>
-          <p className="text-xl font-bold">${formatUsdc(rollCost)}</p>
-        </div>
-        <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
-          <p className="text-xs text-base-content/50 uppercase">Win Rate</p>
-          <p className="text-xl font-bold text-amber-400">~9%</p>
-        </div>
-        <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
-          <p className="text-xs text-base-content/50 uppercase">Payout</p>
-          <p className="text-xl font-bold text-green-400">${formatUsdc(rollPayout)}</p>
-        </div>
-        <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
-          <p className="text-xs text-base-content/50 uppercase">Pool</p>
-          <p className="text-xl font-bold">${formatUsdc(effectivePool)}</p>
+        {/* Pool Display */}
+        <div className="bg-base-100/80 backdrop-blur rounded-xl px-6 py-2 border border-base-300">
+          <span className="text-sm text-base-content/50">House Pool: </span>
+          <span className="font-bold text-lg">${formatUsdc(effectivePool)}</span>
         </div>
       </div>
 
-      {/* Main Gambling Panel */}
-      <div className="bg-base-100 rounded-3xl p-8 shadow-2xl border border-base-300 w-full max-w-lg mb-8">
-        {/* Roll Result Display */}
-        {lastRollResult && (
-          <div
-            className={`rounded-2xl p-8 text-center mb-6 border-2 ${
-              lastRollResult.won
-                ? "bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-500"
-                : "bg-gradient-to-br from-red-500/20 to-orange-500/20 border-red-500"
-            }`}
-          >
-            <div className="text-6xl mb-3">{lastRollResult.won ? "🎉" : "💀"}</div>
-            <p className={`text-3xl font-black ${lastRollResult.won ? "text-green-400" : "text-red-400"}`}>
-              {lastRollResult.won ? "WINNER!" : "Better luck next time"}
-            </p>
-            {lastRollResult.won && <p className="text-2xl mt-2 font-bold">+{lastRollResult.payout} USDC</p>}
-            <button className="btn btn-ghost btn-sm mt-4 opacity-60" onClick={() => setLastRollResult(null)}>
-              Dismiss
-            </button>
-          </div>
-        )}
+      {/* Main Content */}
+      <div className="w-full max-w-5xl px-4 pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Keno Board */}
+          <div className="lg:col-span-2">
+            <KenoBoard
+              selectedNumbers={selectedNumbers}
+              winningNumbers={showResults ? winningNumbers : []}
+              onToggleNumber={toggleNumber}
+              disabled={!currentRound.canBet || isLoading}
+              maxPicks={10}
+              showResults={showResults}
+            />
 
-        {!canPlay ? (
-          <div className="bg-error/10 border border-error/30 rounded-xl p-6 text-center">
-            <div className="text-4xl mb-2">🚫</div>
-            <p className="text-error font-bold text-lg">Rolling Disabled</p>
-            <p className="text-sm text-base-content/60 mt-1">Pool needs more liquidity</p>
-            <Link href="/house" className="btn btn-outline btn-sm mt-4">
-              Add Liquidity →
-            </Link>
+            {/* Winning Numbers Display (when revealed) */}
+            {showResults && (
+              <div className="mt-4 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-xl p-4 border border-amber-500/20">
+                <h3 className="font-bold text-amber-400 mb-2">🎯 Last Round&apos;s Winning Numbers</h3>
+                <div className="flex flex-wrap gap-2">
+                  {winningNumbers.map((num, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center justify-center w-8 h-8 text-sm font-bold rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 text-amber-900"
+                    >
+                      {num}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        ) : hasCommitment ? (
+
+          {/* Right Column - Controls */}
           <div className="space-y-4">
-            {/* Show result if we can check */}
-            {canCheckRoll && pendingSecret ? (
-              isWinner ? (
-                <div className="rounded-2xl p-8 text-center border-2 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-500">
-                  <div className="text-6xl mb-3">🎉</div>
-                  <p className="text-3xl font-black text-green-400">YOU WON!</p>
-                  <p className="text-xl mt-2">Claim your ${formatUsdc(rollPayout)} below</p>
-                </div>
-              ) : (
-                <div className="rounded-2xl p-8 text-center border-2 bg-gradient-to-br from-red-500/20 to-orange-500/20 border-red-500">
-                  <div className="text-6xl mb-3">💀</div>
-                  <p className="text-3xl font-black text-red-400">You Lost</p>
-                  <p className="text-base-content/60 mt-2">No need to reveal - try again!</p>
-                </div>
-              )
-            ) : (
-              <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="bg-primary/20 rounded-full p-2">
-                    <CubeIcon className="h-6 w-6 text-primary" />
-                  </div>
+            {/* User Balance */}
+            {connectedAddress && (
+              <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl px-4 py-3 border border-green-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl">💵</div>
                   <div>
-                    <span className="font-bold text-lg">Roll Pending</span>
-                    <p className="text-sm text-base-content/60">Block: {commitment[1].toString()}</p>
+                    <p className="text-xs text-base-content/60 uppercase tracking-wide">Your USDC</p>
+                    <p className="text-xl font-bold text-green-400">
+                      ${formatUsdc(userUsdcBalance as bigint | undefined)}
+                    </p>
                   </div>
                 </div>
-
-                {commitmentIsExpired ? (
-                  <div className="bg-error/10 rounded-lg p-3 text-error text-sm">
-                    ⚠️ Commitment expired (256 blocks passed) - stake forfeited to house
-                  </div>
-                ) : commitmentCanReveal ? (
-                  pendingSecret ? (
-                    <div className="bg-warning/10 rounded-lg p-3 text-warning text-sm">⏳ Checking result...</div>
-                  ) : (
-                    <div className="bg-error/10 rounded-lg p-3 text-error text-sm">
-                      ⚠️ Secret lost! Enter it below or wait for expiry to cancel.
-                    </div>
-                  )
-                ) : (
-                  <div className="bg-warning/10 rounded-lg p-3 text-warning text-sm">
-                    ⏳ Wait 1 block to see result...
-                  </div>
-                )}
               </div>
             )}
 
-            {/* Manual secret entry if lost */}
-            {!pendingSecret && !commitmentIsExpired && (
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-warning">Enter lost secret to recover:</span>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered input-sm font-mono text-xs"
-                  placeholder="0x..."
-                  value={gamblingSecret}
-                  onChange={e => {
-                    setGamblingSecret(e.target.value);
-                    if (e.target.value.startsWith("0x") && e.target.value.length === 66) {
-                      setPendingSecret(e.target.value);
-                      localStorage.setItem("pendingGamblingSecret", e.target.value);
-                    }
-                  }}
-                />
-              </div>
-            )}
+            {/* Round Status */}
+            <RoundStatus
+              roundId={currentRound.roundId}
+              phase={currentRound.phase}
+              startBlock={currentRound.startBlock}
+              totalCards={currentRound.totalCards}
+              totalBets={currentRound.totalBets}
+              currentBlock={blockNumber ?? 0n}
+              bettingPeriodBlocks={BETTING_PERIOD_BLOCKS}
+            />
 
-            {/* Only show claim button for winners */}
-            {canCheckRoll && isWinner && pendingSecret && (
-              <button
-                className="btn btn-success btn-lg w-full gap-2 text-lg"
-                onClick={handleRevealRoll}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <span className="loading loading-spinner loading-md"></span>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-6 w-6" />
-                    CLAIM ${formatUsdc(rollPayout)}!
-                  </>
-                )}
-              </button>
-            )}
+            {/* Bet Panel */}
+            <BetPanel
+              selectedNumbers={selectedNumbers}
+              maxBet={maxBetData ?? 0n}
+              userBalance={(userUsdcBalance as bigint) ?? 0n}
+              onPlaceBet={handlePlaceBet}
+              onQuickPick={quickPick}
+              onClearSelection={clearSelection}
+              isLoading={isLoading}
+              disabled={!currentRound.canBet || !connectedAddress}
+            />
 
-            {/* For losers, show button to roll again (new commit) */}
-            {canCheckRoll && !isWinner && pendingSecret && (
-              <button
-                className="btn btn-primary btn-lg w-full gap-2 text-lg"
-                onClick={async () => {
-                  // Clear old secret and start new commit
-                  setPendingSecret(null);
-                  localStorage.removeItem("pendingGamblingSecret");
-                  await handleCommitRoll();
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <span className="loading loading-spinner loading-md"></span>
-                    {isWaitingForApproval && <span>Waiting for approval...</span>}
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className="h-6 w-6" />
-                    ROLL AGAIN (${formatUsdc(rollCost)})
-                  </>
-                )}
-              </button>
+            {/* Player Cards */}
+            {connectedAddress && playerCards.length > 0 && (
+              <PlayerCards
+                cards={playerCards}
+                winningNumbers={winningNumbers}
+                roundRevealed={showResults}
+                onClaimCard={handleClaimCard}
+                isClaimingCard={isClaimingCard}
+              />
             )}
-
-            {commitmentIsExpired && (
-              <div className="bg-error/20 border border-error/40 rounded-xl p-4 text-center">
-                <div className="text-3xl mb-2">💸</div>
-                <p className="text-error font-bold">Commitment Expired</p>
-                <p className="text-sm text-base-content/60 mt-1">
-                  Your ${formatUsdc(rollCost)} stake was forfeited to the house.
-                </p>
-                <button
-                  className="btn btn-primary btn-sm mt-3"
-                  onClick={async () => {
-                    // Just clear local state and start fresh
-                    setPendingSecret(null);
-                    localStorage.removeItem("pendingGamblingSecret");
-                    refetchAll();
-                  }}
-                >
-                  Start Fresh
-                </button>
-              </div>
-            )}
-
-            <button className="btn btn-ghost btn-sm w-full text-error/60" onClick={handleResetCommit}>
-              Clear Local Data
-            </button>
           </div>
-        ) : (
-          <div className="space-y-5">
-            <p className="text-sm text-base-content/60 text-center">
-              Two-step process: Click to start, wait a moment, then reveal.
-            </p>
-
-            <button
-              className="btn btn-primary btn-lg w-full gap-2 text-lg"
-              onClick={handleCommitRoll}
-              disabled={isLoading || !connectedAddress || !rollCost}
-            >
-              {isLoading ? (
-                <>
-                  <span className="loading loading-spinner loading-md"></span>
-                  {isWaitingForApproval && <span>Waiting for approval...</span>}
-                </>
-              ) : (
-                <>
-                  <SparklesIcon className="h-6 w-6" />
-                  ROLL (${formatUsdc(rollCost)})
-                </>
-              )}
-            </button>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Link to House */}

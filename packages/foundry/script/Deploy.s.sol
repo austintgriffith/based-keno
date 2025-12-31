@@ -2,10 +2,10 @@
 pragma solidity ^0.8.24;
 
 import "./DeployHelpers.s.sol";
-import "../contracts/DiceGame.sol";
+import "../contracts/BasedKeno.sol";
 
 /**
- * @notice Deployment script for DiceGame (which deploys HousePool + VaultManager)
+ * @notice Deployment script for BasedKeno (which deploys HousePool + VaultManager)
  * @dev Uses real USDC and Summer.fi FleetCommander on Base
  * 
  * Usage:
@@ -18,22 +18,28 @@ contract DeployScript is ScaffoldETHDeploy {
     address constant FLEET_COMMANDER = 0x98C49e13bf99D7CAd8069faa2A370933EC9EcF17; // Summer.fi LVUSDC vault (FleetCommander)
 
     function run() external ScaffoldEthDeployerRunner {
-        // Deploy DiceGame (which deploys VaultManager and HousePool internally)
-        DiceGame diceGame = new DiceGame(USDC, FLEET_COMMANDER);
+        // Get deployer address to use as initial dealer
+        address deployer = msg.sender;
+        
+        // Deploy BasedKeno (which deploys VaultManager and HousePool internally)
+        BasedKeno basedKeno = new BasedKeno(USDC, FLEET_COMMANDER, deployer);
         
         // Export all contracts for Scaffold-ETH
-        deployments.push(Deployment("DiceGame", address(diceGame)));
-        deployments.push(Deployment("HousePool", address(diceGame.housePool())));
-        deployments.push(Deployment("VaultManager", address(diceGame.vaultManager())));
+        deployments.push(Deployment("BasedKeno", address(basedKeno)));
+        deployments.push(Deployment("HousePool", address(basedKeno.housePool())));
+        deployments.push(Deployment("VaultManager", address(basedKeno.vaultManager())));
         
         console.log("=== DEPLOYMENT COMPLETE ===");
-        console.log("DiceGame:", address(diceGame));
-        console.log("HousePool:", address(diceGame.housePool()));
-        console.log("VaultManager:", address(diceGame.vaultManager()));
+        console.log("BasedKeno:", address(basedKeno));
+        console.log("HousePool:", address(basedKeno.housePool()));
+        console.log("VaultManager:", address(basedKeno.vaultManager()));
+        console.log("Dealer:", deployer);
         console.log("USDC:", USDC);
         console.log("FleetCommander:", FLEET_COMMANDER);
         console.log("");
-        console.log("Next: Approve USDC and call housePool.deposit(amount) to seed liquidity");
-        console.log("Idle USDC will automatically be invested in Summer.fi for yield!");
+        console.log("Next steps:");
+        console.log("1. Approve USDC and call housePool.deposit(amount) to seed liquidity");
+        console.log("2. Players can placeBet() to start a round");
+        console.log("3. Dealer commits after betting period, then reveals to draw winning numbers");
     }
 }

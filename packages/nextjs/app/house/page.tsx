@@ -14,7 +14,7 @@ import {
   PlusCircleIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
-import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals, HOUSE has 18 decimals
 const USDC_DECIMALS = 6;
@@ -56,17 +56,19 @@ const HousePage: NextPage = () => {
   const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
-  // Read HousePool address from DiceGame contract
-  const { data: housePoolAddress } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "housePool",
-  });
+  // Get HousePool contract address from deployed contracts
+  const { data: housePoolContractInfo } = useDeployedContractInfo({ contractName: "HousePool" });
+  const housePoolAddress = housePoolContractInfo?.address;
 
-  // Read canPlay from DiceGame (game checks its own reserve requirements)
-  const { data: canPlay, refetch: refetchCanPlay } = useScaffoldReadContract({
-    contractName: "DiceGame",
-    functionName: "canPlay",
+  // Max bet is calculated client-side from effectivePool / MAX_PAYOUT_MULTIPLIER
+  // This is a simplified version - in production, call BasedKeno.maxBet()
+  const { data: effectivePoolForMaxBet } = useScaffoldReadContract({
+    contractName: "HousePool",
+    functionName: "effectivePool",
   });
+  // MAX_PAYOUT_MULTIPLIER = 2500, so maxBet = effectivePool / 2500
+  const maxBet = effectivePoolForMaxBet ? effectivePoolForMaxBet / 2500n : 0n;
+  const refetchMaxBet = useCallback(() => {}, []); // No-op since derived
 
   // Read pool stats from HousePool (auto-uses ABI from deployedContracts.ts)
   const { data: totalPool, refetch: refetchTotalPool } = useScaffoldReadContract({
@@ -139,7 +141,7 @@ const HousePage: NextPage = () => {
     refetchVaultPool();
     refetchEffectivePool();
     refetchSharePrice();
-    refetchCanPlay();
+    refetchMaxBet();
     refetchTotalSupply();
     refetchTotalPendingShares();
     refetchUserHouseBalance();
@@ -151,7 +153,7 @@ const HousePage: NextPage = () => {
     refetchVaultPool,
     refetchEffectivePool,
     refetchSharePrice,
-    refetchCanPlay,
+    refetchMaxBet,
     refetchTotalSupply,
     refetchTotalPendingShares,
     refetchUserHouseBalance,
@@ -324,6 +326,9 @@ const HousePage: NextPage = () => {
   const withdrawalCanExecute = withdrawalRequest && withdrawalRequest[3];
   const withdrawalIsExpired = withdrawalRequest && withdrawalRequest[4];
 
+  // Check if game is playable (has enough liquidity)
+  const canPlay = maxBet && maxBet > 0n;
+
   return (
     <div className="flex flex-col items-center pt-8 px-4 pb-12 min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-base-100 to-base-100">
       <h1 className="text-5xl font-black mb-2 tracking-tight">
@@ -332,7 +337,7 @@ const HousePage: NextPage = () => {
         </span>
       </h1>
       <p className="text-base-content/60 mb-8 text-center max-w-md">
-        Buy HOUSE tokens to own the casino. Your tokens grow in value as the house profits from gambling + DeFi yield.
+        Buy HOUSE tokens to own the casino. Your tokens grow in value as the house profits from Keno + DeFi yield.
       </p>
 
       {/* Pool Stats */}
@@ -525,20 +530,20 @@ const HousePage: NextPage = () => {
         </div>
       </div>
 
-      {/* Link to Roll */}
+      {/* Link to Play */}
       <div className="text-center pb-8">
-        <p className="text-base-content/50 mb-3">Want to gamble against the house?</p>
+        <p className="text-base-content/50 mb-3">Want to play Keno against the house?</p>
         <Link href="/" className="btn btn-outline gap-2">
           <SparklesIcon className="h-5 w-5" />
-          Roll the Dice
+          Play Based Keno
         </Link>
       </div>
 
       {/* Info Footer */}
       <div className="text-center text-sm text-base-content/40 max-w-xl px-4">
         <p>
-          <strong>How it works:</strong> Buy HOUSE tokens to own a share of the casino. As gamblers play and lose, the
-          pool grows and HOUSE price increases. The house has a ~9% edge, plus you earn DeFi yield on idle funds!
+          <strong>How it works:</strong> Buy HOUSE tokens to own a share of the casino. As Keno players play and lose,
+          the pool grows and HOUSE price increases. The house has a ~5% edge, plus you earn DeFi yield on idle funds!
         </p>
         <p className="mt-2">Selling requires a 10-second cooldown to prevent front-running.</p>
       </div>

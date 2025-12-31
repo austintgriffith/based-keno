@@ -1619,7 +1619,7 @@ const deployedContracts = {
     },
   },
   31337: {
-    DiceGame: {
+    BasedKeno: {
       address: "0x25d23b63f166ec74b87b40cbcc5548d29576c56c",
       abi: [
         {
@@ -1635,12 +1635,17 @@ const deployedContracts = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "_dealer",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
         {
           type: "function",
-          name: "MIN_RESERVE",
+          name: "BETTING_PERIOD",
           inputs: [],
           outputs: [
             {
@@ -1653,7 +1658,7 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "ROLL_COST",
+          name: "MAX_MULTIPLIER",
           inputs: [],
           outputs: [
             {
@@ -1666,7 +1671,7 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "ROLL_PAYOUT",
+          name: "MAX_PICKS",
           inputs: [],
           outputs: [
             {
@@ -1679,7 +1684,7 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "WIN_MODULO",
+          name: "MIN_BET",
           inputs: [],
           outputs: [
             {
@@ -1692,40 +1697,97 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "canPlay",
+          name: "MIN_PICKS",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bool",
-              internalType: "bool",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "checkRoll",
+          name: "NUMBERS_DRAWN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "REVEAL_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "TIMEOUT_BLOCKS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "TOTAL_NUMBERS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "cards",
           inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
             {
               name: "player",
               type: "address",
               internalType: "address",
             },
             {
-              name: "secret",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "canCheck",
-              type: "bool",
-              internalType: "bool",
+              name: "betAmount",
+              type: "uint256",
+              internalType: "uint256",
             },
             {
-              name: "isWinner",
+              name: "claimed",
               type: "bool",
               internalType: "bool",
             },
@@ -1734,7 +1796,60 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "commitRoll",
+          name: "checkPayout",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "cardId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "hits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "payout",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimWinnings",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "cardId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "payout",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commitRound",
           inputs: [
             {
               name: "commitHash",
@@ -1747,22 +1862,11 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "commits",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
+          name: "currentRound",
+          inputs: [],
           outputs: [
             {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
+              name: "",
               type: "uint256",
               internalType: "uint256",
             },
@@ -1771,34 +1875,172 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "getCommitment",
+          name: "dealer",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getCard",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "cardId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "numbers",
+              type: "uint8[]",
+              internalType: "uint8[]",
+            },
+            {
+              name: "betAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "claimed",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getCurrentRound",
+          inputs: [],
+          outputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "phase",
+              type: "uint8",
+              internalType: "enum BasedKeno.RoundPhase",
+            },
+            {
+              name: "startBlock",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitBlock",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalCards",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalBets",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "canBet",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "canCommit",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "canRefund",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getPayoutMultiplier",
+          inputs: [
+            {
+              name: "picks",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "hits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "multiplier",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getPlayerCards",
           inputs: [
             {
               name: "player",
               type: "address",
               internalType: "address",
             },
-          ],
-          outputs: [
             {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
+          ],
+          outputs: [
             {
-              name: "canReveal",
-              type: "bool",
-              internalType: "bool",
+              name: "",
+              type: "uint256[]",
+              internalType: "uint256[]",
             },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getWinningNumbers",
+          inputs: [
             {
-              name: "isExpired",
-              type: "bool",
-              internalType: "bool",
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8[20]",
+              internalType: "uint8[20]",
             },
           ],
           stateMutability: "view",
@@ -1818,7 +2060,104 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "revealRoll",
+          name: "maxBet",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "payouts",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "placeBet",
+          inputs: [
+            {
+              name: "numbers",
+              type: "uint8[]",
+              internalType: "uint8[]",
+            },
+            {
+              name: "betAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "cardId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "playerCards",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "refundRound",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revealRound",
           inputs: [
             {
               name: "secret",
@@ -1826,14 +2165,52 @@ const deployedContracts = {
               internalType: "bytes32",
             },
           ],
-          outputs: [
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rounds",
+          inputs: [
             {
-              name: "won",
-              type: "bool",
-              internalType: "bool",
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
-          stateMutability: "nonpayable",
+          outputs: [
+            {
+              name: "phase",
+              type: "uint8",
+              internalType: "enum BasedKeno.RoundPhase",
+            },
+            {
+              name: "startBlock",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitBlock",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "totalCards",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalBets",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -1863,8 +2240,20 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "RollCommitted",
+          name: "BetPlaced",
           inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "cardId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
             {
               name: "player",
               type: "address",
@@ -1872,32 +2261,13 @@ const deployedContracts = {
               internalType: "address",
             },
             {
-              name: "commitment",
-              type: "bytes32",
+              name: "numbers",
+              type: "uint8[]",
               indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RollRevealed",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
+              internalType: "uint8[]",
             },
             {
-              name: "won",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "payout",
+              name: "betAmount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -1906,8 +2276,162 @@ const deployedContracts = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "RoundCommitted",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "commitBlock",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundRefunded",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "totalRefunded",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundRevealed",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "winningNumbers",
+              type: "uint8[20]",
+              indexed: false,
+              internalType: "uint8[20]",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundStarted",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "startBlock",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WinningsClaimed",
+          inputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "cardId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "payout",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "hits",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
-          name: "GameNotPlayable",
+          name: "BetTooLarge",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "BetTooSmall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "BettingPeriodNotOver",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "CardAlreadyClaimed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "DuplicateNumber",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidCard",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidNumber",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidNumberCount",
           inputs: [],
         },
         {
@@ -1917,22 +2441,57 @@ const deployedContracts = {
         },
         {
           type: "error",
-          name: "NoCommitment",
+          name: "NotDealer",
           inputs: [],
         },
         {
           type: "error",
-          name: "TooEarly",
+          name: "NothingToRefund",
           inputs: [],
         },
         {
           type: "error",
-          name: "TooLate",
+          name: "NumbersNotSorted",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundAlreadyActive",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotCommitted",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotRevealed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "TimeoutNotReached",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "TooEarlyToReveal",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "TooLateToReveal",
           inputs: [],
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40212480,
+      deployedOnBlock: 40217165,
     },
     HousePool: {
       address: "0x06613A0B36a41ae459A03A2Fd9aF588E2c07ec6F",
