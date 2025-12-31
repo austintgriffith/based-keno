@@ -5,8 +5,16 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
-import { BanknotesIcon, ClockIcon, MinusCircleIcon, PlusCircleIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import {
+  ArrowTrendingUpIcon,
+  BanknotesIcon,
+  ClockIcon,
+  CubeIcon,
+  MinusCircleIcon,
+  PlusCircleIcon,
+  SparklesIcon,
+} from "@heroicons/react/24/outline";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals, HOUSE has 18 decimals
 const USDC_DECIMALS = 6;
@@ -36,99 +44,8 @@ const USDC_ABI = [
   },
 ] as const;
 
-// HousePool ABI (minimal - only functions we need)
-const HOUSE_POOL_ABI = [
-  {
-    inputs: [{ name: "usdcAmount", type: "uint256" }],
-    name: "deposit",
-    outputs: [{ name: "shares", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "shares", type: "uint256" }],
-    name: "requestWithdrawal",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "withdraw",
-    outputs: [{ name: "usdcOut", type: "uint256" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "cancelWithdrawal",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "totalPool",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "effectivePool",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "sharePrice",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "totalSupply",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "totalPendingShares",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "lp", type: "address" }],
-    name: "usdcValue",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "lp", type: "address" }],
-    name: "getWithdrawalRequest",
-    outputs: [
-      { name: "shares", type: "uint256" },
-      { name: "unlockTime", type: "uint256" },
-      { name: "expiryTime", type: "uint256" },
-      { name: "canWithdraw", type: "bool" },
-      { name: "isExpired", type: "bool" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+// NOTE: HousePool ABI is auto-loaded from deployedContracts.ts via useScaffoldReadContract/useScaffoldWriteContract
+// This ensures the ABI always stays in sync when the contract is updated and redeployed.
 
 const HousePage: NextPage = () => {
   const { address: connectedAddress } = useAccount();
@@ -151,52 +68,57 @@ const HousePage: NextPage = () => {
     functionName: "canPlay",
   });
 
-  // Read pool stats from HousePool using the dynamic address
-  const { data: totalPool, refetch: refetchTotalPool } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  // Read pool stats from HousePool (auto-uses ABI from deployedContracts.ts)
+  const { data: totalPool, refetch: refetchTotalPool } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "totalPool",
   });
 
-  const { data: effectivePool, refetch: refetchEffectivePool } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  const { data: liquidPool, refetch: refetchLiquidPool } = useScaffoldReadContract({
+    contractName: "HousePool",
+    functionName: "liquidPool",
+  });
+
+  const { data: vaultPool, refetch: refetchVaultPool } = useScaffoldReadContract({
+    contractName: "HousePool",
+    functionName: "vaultPool",
+  });
+
+  const { data: effectivePool, refetch: refetchEffectivePool } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "effectivePool",
   });
 
-  const { data: sharePrice, refetch: refetchSharePrice } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  const { data: sharePrice, refetch: refetchSharePrice } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "sharePrice",
   });
 
-  const { data: totalSupply, refetch: refetchTotalSupply } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  const { data: totalSupply, refetch: refetchTotalSupply } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "totalSupply",
   });
 
-  const { refetch: refetchTotalPendingShares } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  const { refetch: refetchTotalPendingShares } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "totalPendingShares",
   });
 
-  // Read user balances
-  const { data: userHouseBalance, refetch: refetchUserHouseBalance } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  // Read user balances (auto-uses ABI from deployedContracts.ts)
+  // Pass undefined in tuple to disable query when not connected
+  const { data: userHouseBalance, refetch: refetchUserHouseBalance } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "balanceOf",
-    args: connectedAddress ? [connectedAddress] : undefined,
+    args: [connectedAddress],
   });
 
-  const { data: userUsdcValue, refetch: refetchUserUsdcValue } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  const { data: userUsdcValue, refetch: refetchUserUsdcValue } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "usdcValue",
-    args: connectedAddress ? [connectedAddress] : undefined,
+    args: [connectedAddress],
   });
 
+  // USDC balance still uses raw wagmi hook since it's an external contract
   const { data: userUsdcBalance, refetch: refetchUserUsdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: USDC_ABI,
@@ -204,21 +126,23 @@ const HousePage: NextPage = () => {
     args: connectedAddress ? [connectedAddress] : undefined,
   });
 
-  // Read withdrawal request
-  const { data: withdrawalRequest, refetch: refetchWithdrawalRequest } = useReadContract({
-    address: housePoolAddress,
-    abi: HOUSE_POOL_ABI,
+  // Read withdrawal request (auto-uses ABI from deployedContracts.ts)
+  const { data: withdrawalRequest, refetch: refetchWithdrawalRequest } = useScaffoldReadContract({
+    contractName: "HousePool",
     functionName: "getWithdrawalRequest",
-    args: connectedAddress ? [connectedAddress] : undefined,
+    args: [connectedAddress],
   });
 
-  // Write hooks
-  const { writeContractAsync: writeHousePool, isPending: isHousePoolWritePending } = useWriteContract();
+  // Write hooks (HousePool uses scaffold hook for auto-ABI, USDC uses raw wagmi)
+  const { writeContractAsync: writeHousePoolAsync, isPending: isHousePoolWritePending } =
+    useScaffoldWriteContract("HousePool");
   const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useWriteContract();
 
   // Refetch all data
   const refetchAll = useCallback(() => {
     refetchTotalPool();
+    refetchLiquidPool();
+    refetchVaultPool();
     refetchEffectivePool();
     refetchSharePrice();
     refetchCanPlay();
@@ -230,6 +154,8 @@ const HousePage: NextPage = () => {
     refetchWithdrawalRequest();
   }, [
     refetchTotalPool,
+    refetchLiquidPool,
+    refetchVaultPool,
     refetchEffectivePool,
     refetchSharePrice,
     refetchCanPlay,
@@ -298,13 +224,11 @@ const HousePage: NextPage = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
       setIsWaitingForApproval(false);
 
-      // Deposit
-      await writeHousePool({
-        address: housePoolAddress,
-        abi: HOUSE_POOL_ABI,
+      // Deposit - uses the single-arg version (no slippage protection)
+      await writeHousePoolAsync({
         functionName: "deposit",
         args: [amountUsdc],
-      });
+      } as Parameters<typeof writeHousePoolAsync>[0]);
 
       setDepositAmount("");
       refetchAll();
@@ -321,9 +245,8 @@ const HousePage: NextPage = () => {
     try {
       const shares = parseUnits(withdrawShares, HOUSE_DECIMALS);
 
-      await writeHousePool({
-        address: housePoolAddress,
-        abi: HOUSE_POOL_ABI,
+      // Uses auto-updated ABI from deployedContracts.ts
+      await writeHousePoolAsync({
         functionName: "requestWithdrawal",
         args: [shares],
       });
@@ -340,11 +263,11 @@ const HousePage: NextPage = () => {
     if (!housePoolAddress) return;
 
     try {
-      await writeHousePool({
-        address: housePoolAddress,
-        abi: HOUSE_POOL_ABI,
+      // Uses auto-updated ABI from deployedContracts.ts (no-arg overload)
+      await writeHousePoolAsync({
         functionName: "withdraw",
-      });
+        args: [],
+      } as Parameters<typeof writeHousePoolAsync>[0]);
 
       refetchAll();
     } catch (error) {
@@ -357,9 +280,8 @@ const HousePage: NextPage = () => {
     if (!housePoolAddress) return;
 
     try {
-      await writeHousePool({
-        address: housePoolAddress,
-        abi: HOUSE_POOL_ABI,
+      // Uses auto-updated ABI from deployedContracts.ts
+      await writeHousePoolAsync({
         functionName: "cancelWithdrawal",
       });
 
@@ -396,6 +318,10 @@ const HousePage: NextPage = () => {
     return ((parseFloat(usdcAmount) * 1e6) / Number(sharePrice)).toFixed(4);
   };
 
+  // Calculate vault percentage
+  const vaultPercentage =
+    totalPool && totalPool > 0n && vaultPool ? ((Number(vaultPool) / Number(totalPool)) * 100).toFixed(1) : "0";
+
   // Parse withdrawal request
   const hasWithdrawalRequest = withdrawalRequest && withdrawalRequest[0] > 0n;
   const withdrawalCanExecute = withdrawalRequest && withdrawalRequest[3];
@@ -409,11 +335,11 @@ const HousePage: NextPage = () => {
         </span>
       </h1>
       <p className="text-base-content/60 mb-8 text-center max-w-md">
-        Buy HOUSE tokens to own the casino. Your tokens grow in value as the house profits from gambling.
+        Buy HOUSE tokens to own the casino. Your tokens grow in value as the house profits from gambling + DeFi yield.
       </p>
 
       {/* Pool Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full max-w-4xl mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full max-w-4xl mb-6">
         <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
           <p className="text-xs text-base-content/50 uppercase tracking-wide">Total Pool</p>
           <p className="text-2xl font-bold text-primary">${formatUsdc(totalPool)}</p>
@@ -436,6 +362,37 @@ const HousePage: NextPage = () => {
             {canPlay ? "Yes ✓" : "No ✗"}
           </p>
         </div>
+      </div>
+
+      {/* Vault Status Card */}
+      <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-3xl p-5 w-full max-w-4xl mb-8 border border-emerald-500/20">
+        <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <ArrowTrendingUpIcon className="h-5 w-5 text-emerald-500" />
+          DeFi Yield Generation
+          <span className="ml-auto text-sm font-normal text-base-content/60">via Summer.fi</span>
+        </h2>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-base-100/50 rounded-xl p-4">
+            <p className="text-sm text-base-content/60 flex items-center gap-1">
+              <CubeIcon className="h-4 w-4" />
+              In Vault (Earning Yield)
+            </p>
+            <p className="text-2xl font-bold text-emerald-500">${formatUsdc(vaultPool)}</p>
+            <p className="text-xs text-base-content/50">{vaultPercentage}% of pool earning yield</p>
+          </div>
+          <div className="bg-base-100/50 rounded-xl p-4">
+            <p className="text-sm text-base-content/60 flex items-center gap-1">
+              <BanknotesIcon className="h-4 w-4" />
+              Liquid (Pending)
+            </p>
+            <p className="text-2xl font-bold">${formatUsdc(liquidPool)}</p>
+            <p className="text-xs text-base-content/50">Temporarily held for transfers</p>
+          </div>
+        </div>
+        <p className="text-xs text-base-content/50 mt-3 text-center">
+          100% of idle USDC is deposited into Summer.fi&apos;s LVUSDC vault to earn yield. Withdrawals happen instantly
+          on demand.
+        </p>
       </div>
 
       {/* User Position */}
@@ -594,7 +551,7 @@ const HousePage: NextPage = () => {
       <div className="text-center text-sm text-base-content/40 max-w-xl px-4">
         <p>
           <strong>How it works:</strong> Buy HOUSE tokens to own a share of the casino. As gamblers play and lose, the
-          pool grows and HOUSE price increases. The house has a ~9% edge.
+          pool grows and HOUSE price increases. The house has a ~9% edge, plus you earn DeFi yield on idle funds!
         </p>
         <p className="mt-2">Selling requires a 10-second cooldown to prevent front-running.</p>
       </div>

@@ -22,6 +22,11 @@ const deployedContracts = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "_vaultManager",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
@@ -274,6 +279,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "liquidPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "name",
           inputs: [],
           outputs: [
@@ -486,6 +504,32 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "vaultManager",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract VaultManager",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "vaultPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "withdraw",
           inputs: [
             {
@@ -588,6 +632,19 @@ const deployedContracts = {
             },
             {
               name: "sharesOut",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DepositedToVault",
+          inputs: [
+            {
+              name: "amount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -753,6 +810,19 @@ const deployedContracts = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "WithdrawnFromVault",
+          inputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "ERC20InsufficientAllowance",
           inputs: [
@@ -905,13 +975,18 @@ const deployedContracts = {
   },
   31337: {
     DiceGame: {
-      address: "0x7964b67627b48e07a236339559b74b92881711d0",
+      address: "0x25d23b63f166ec74b87b40cbcc5548d29576c56c",
       abi: [
         {
           type: "constructor",
           inputs: [
             {
               name: "_usdc",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_fleetCommander",
               type: "address",
               internalType: "address",
             },
@@ -1129,6 +1204,19 @@ const deployedContracts = {
           stateMutability: "view",
         },
         {
+          type: "function",
+          name: "vaultManager",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract VaultManager",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
           type: "event",
           name: "RollCommitted",
           inputs: [
@@ -1199,10 +1287,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40208100,
+      deployedOnBlock: 40212480,
     },
     HousePool: {
-      address: "0x53e14755f5F9a338e40a03b9f432D2dC017ac807",
+      address: "0x06613A0B36a41ae459A03A2Fd9aF588E2c07ec6F",
       abi: [
         {
           type: "constructor",
@@ -1214,6 +1302,11 @@ const deployedContracts = {
             },
             {
               name: "_game",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_vaultManager",
               type: "address",
               internalType: "address",
             },
@@ -1469,6 +1562,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "liquidPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "name",
           inputs: [],
           outputs: [
@@ -1681,6 +1787,32 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "vaultManager",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract VaultManager",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "vaultPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "withdraw",
           inputs: [
             {
@@ -1783,6 +1915,19 @@ const deployedContracts = {
             },
             {
               name: "sharesOut",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "DepositedToVault",
+          inputs: [
+            {
+              name: "amount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -1948,6 +2093,19 @@ const deployedContracts = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "WithdrawnFromVault",
+          inputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "ERC20InsufficientAllowance",
           inputs: [
@@ -2091,6 +2249,337 @@ const deployedContracts = {
         {
           type: "error",
           name: "ZeroShares",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {},
+    },
+    VaultManager: {
+      address: "0x974fb78aE31079d3a44Da3791875AE6B9db63619",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "_fleetCommander",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_usdc",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "receive",
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "depositIntoVault",
+          inputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "emergencyWithdraw",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "to",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "fleetCommander",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC4626",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getCurrentValue",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getTotalValue",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getUSDCBalance",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getVaultShares",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "housePool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "housePoolSet",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setHousePool",
+          inputs: [
+            {
+              name: "_housePool",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "usdc",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdrawFromVault",
+          inputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "DepositedIntoVault",
+          inputs: [
+            {
+              name: "usdcAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "sharesReceived",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "EmergencyWithdraw",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "to",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "HousePoolSet",
+          inputs: [
+            {
+              name: "housePool",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WithdrawnFromVault",
+          inputs: [
+            {
+              name: "usdcAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "sharesBurned",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "ETHTransferFailed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "HousePoolAlreadySet",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "HousePoolNotSet",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InsufficientBalance",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidAddress",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoFundsInVault",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoUSDCToDeposit",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeERC20FailedOperation",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "Unauthorized",
           inputs: [],
         },
       ],

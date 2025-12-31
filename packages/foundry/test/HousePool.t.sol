@@ -4,7 +4,9 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../contracts/HousePool.sol";
 import "../contracts/DiceGame.sol";
+import "../contracts/VaultManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// @dev Simple mock USDC for testing
 contract MockUSDC is ERC20 {
@@ -17,10 +19,61 @@ contract MockUSDC is ERC20 {
     }
 }
 
+/// @dev Mock ERC4626 vault to simulate Summer.fi FleetCommander
+contract MockFleetCommander is ERC20 {
+    IERC20 public immutable asset;
+    uint256 public yieldAccrued; // Simulated yield
+    
+    constructor(address _asset) ERC20("Mock Vault Shares", "mvUSDC") {
+        asset = IERC20(_asset);
+    }
+    
+    function decimals() public pure override returns (uint8) { return 6; }
+    
+    // ERC4626 functions
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+        asset.transferFrom(msg.sender, address(this), assets);
+        shares = assets; // 1:1 initially
+        _mint(receiver, shares);
+    }
+    
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares) {
+        shares = previewWithdraw(assets);
+        _burn(owner, shares);
+        asset.transfer(receiver, assets);
+    }
+    
+    function maxWithdraw(address owner) external view returns (uint256) {
+        uint256 shares = balanceOf(owner);
+        return convertToAssets(shares);
+    }
+    
+    function previewWithdraw(uint256 assets) public view returns (uint256) {
+        uint256 totalAssets = asset.balanceOf(address(this));
+        uint256 supply = totalSupply();
+        if (supply == 0 || totalAssets == 0) return assets;
+        return (assets * supply) / totalAssets;
+    }
+    
+    function convertToAssets(uint256 shares) public view returns (uint256) {
+        uint256 supply = totalSupply();
+        if (supply == 0) return shares;
+        return (shares * asset.balanceOf(address(this))) / supply;
+    }
+    
+    // Test helper: simulate yield accrual by minting USDC to the vault
+    function simulateYield(uint256 amount) external {
+        MockUSDC(address(asset)).mint(address(this), amount);
+        yieldAccrued += amount;
+    }
+}
+
 contract HousePoolTest is Test {
     HousePool public housePool;
     DiceGame public diceGame;
+    VaultManager public vaultManager;
     MockUSDC public usdc;
+    MockFleetCommander public mockVault;
     
     address public lp1 = address(2);
     address public lp2 = address(3);
@@ -33,9 +86,13 @@ contract HousePoolTest is Test {
         // Deploy mock USDC
         usdc = new MockUSDC();
         
-        // Deploy DiceGame (which deploys HousePool internally)
-        diceGame = new DiceGame(address(usdc));
+        // Deploy mock FleetCommander vault
+        mockVault = new MockFleetCommander(address(usdc));
+        
+        // Deploy DiceGame (which deploys VaultManager and HousePool internally)
+        diceGame = new DiceGame(address(usdc), address(mockVault));
         housePool = diceGame.housePool();
+        vaultManager = diceGame.vaultManager();
         
         // Distribute USDC to test accounts
         usdc.mint(lp1, INITIAL_USDC);
@@ -63,8 +120,11 @@ contract HousePoolTest is Test {
     function test_Deployment() public view {
         assertEq(address(housePool.game()), address(diceGame));
         assertEq(address(housePool.usdc()), address(usdc));
+        assertEq(address(housePool.vaultManager()), address(vaultManager));
         assertEq(address(diceGame.housePool()), address(housePool));
         assertEq(address(diceGame.usdc()), address(usdc));
+        assertEq(address(diceGame.vaultManager()), address(vaultManager));
+        assertEq(vaultManager.housePool(), address(housePool));
     }
 
     /* ========== DEPOSIT TESTS ========== */
@@ -290,6 +350,124 @@ contract HousePoolTest is Test {
         assertEq(housePool.usdcValue(lp1), 100 * 10**6);
     }
 
+    /* ========== VAULT INTEGRATION TESTS ========== */
+    
+    function test_AllFundsGoToVault_OnDeposit() public {
+        // Deposit 100 USDC - ALL should go to vault
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        // 100% should be in vault, 0 liquid
+        assertEq(housePool.liquidPool(), 0);
+        assertEq(housePool.vaultPool(), 100 * 10**6);
+        assertEq(housePool.totalPool(), 100 * 10**6);
+    }
+    
+    function test_VaultWithdraw_OnPayout() public {
+        // Deposit 100 USDC (all goes to vault)
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        assertEq(housePool.vaultPool(), 100 * 10**6);
+        
+        // Player commits to use pool (adds 0.1 USDC)
+        bytes32 secret = bytes32("test_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(player1);
+        diceGame.commitRoll(commitment);
+        
+        vm.roll(block.number + 2);
+        
+        // If player wins, needs to payout 1 USDC from vault
+        vm.prank(player1);
+        bool won = diceGame.revealRoll(secret);
+        
+        if (won) {
+            // Pool should have paid out from vault
+            assertLt(housePool.totalPool(), 100 * 10**6 + diceGame.ROLL_COST());
+        }
+    }
+    
+    function test_VaultYield_IncreasesSharePrice() public {
+        // Deposit 100 USDC (all goes to vault)
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        uint256 sharePriceBefore = housePool.sharePrice();
+        uint256 valueBeforeYield = housePool.usdcValue(lp1);
+        
+        // Simulate yield in vault (10 USDC = 10%)
+        mockVault.simulateYield(10 * 10**6);
+        
+        uint256 sharePriceAfter = housePool.sharePrice();
+        uint256 valueAfterYield = housePool.usdcValue(lp1);
+        
+        // Share price should increase
+        assertGt(sharePriceAfter, sharePriceBefore);
+        
+        // LP's USDC value should increase by the yield amount
+        assertApproxEqAbs(valueAfterYield, valueBeforeYield + 10 * 10**6, 1);
+    }
+    
+    function test_TotalPool_IncludesVault() public {
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        uint256 liquid = housePool.liquidPool();
+        uint256 vault = housePool.vaultPool();
+        uint256 total = housePool.totalPool();
+        
+        assertEq(total, liquid + vault);
+        assertEq(liquid, 0); // All in vault
+        assertEq(vault, 100 * 10**6);
+    }
+    
+    function test_Withdraw_FromVault() public {
+        // Deposit 100 USDC - all goes to vault
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        assertEq(housePool.vaultPool(), 100 * 10**6);
+        assertEq(housePool.liquidPool(), 0);
+        
+        uint256 shares = housePool.balanceOf(lp1);
+        
+        // Request full withdrawal
+        vm.prank(lp1);
+        housePool.requestWithdrawal(shares);
+        
+        vm.warp(block.timestamp + 11);
+        
+        uint256 usdcBefore = usdc.balanceOf(lp1);
+        
+        // Withdraw should pull from vault
+        vm.prank(lp1);
+        uint256 usdcOut = housePool.withdraw();
+        
+        // Should get full 100 USDC back
+        assertEq(usdcOut, 100 * 10**6);
+        assertEq(usdc.balanceOf(lp1), usdcBefore + 100 * 10**6);
+    }
+    
+    function test_MultipleDeposits_AllGoToVault() public {
+        // First deposit
+        vm.prank(lp1);
+        housePool.deposit(100 * 10**6);
+        
+        assertEq(housePool.vaultPool(), 100 * 10**6);
+        assertEq(housePool.liquidPool(), 0);
+        
+        // Second deposit
+        vm.prank(lp2);
+        housePool.deposit(50 * 10**6);
+        
+        // All 150 should be in vault
+        assertEq(housePool.vaultPool(), 150 * 10**6);
+        assertEq(housePool.liquidPool(), 0);
+        assertEq(housePool.totalPool(), 150 * 10**6);
+    }
+
     /* ========== FUZZ TESTS ========== */
     
     function testFuzz_Deposit(uint256 amount) public {
@@ -301,6 +479,8 @@ contract HousePoolTest is Test {
         
         assertTrue(shares > 0);
         assertEq(housePool.totalPool(), amount);
+        assertEq(housePool.vaultPool(), amount); // All in vault
+        assertEq(housePool.liquidPool(), 0);
     }
     
     function testFuzz_WithdrawalTiming(uint256 waitTime) public {
@@ -337,7 +517,9 @@ contract HousePoolTest is Test {
 contract DiceGameTest is Test {
     HousePool public housePool;
     DiceGame public diceGame;
+    VaultManager public vaultManager;
     MockUSDC public usdc;
+    MockFleetCommander public mockVault;
     
     address public lp1 = address(2);
     address public player1 = address(4);
@@ -347,8 +529,10 @@ contract DiceGameTest is Test {
     
     function setUp() public {
         usdc = new MockUSDC();
-        diceGame = new DiceGame(address(usdc));
+        mockVault = new MockFleetCommander(address(usdc));
+        diceGame = new DiceGame(address(usdc), address(mockVault));
         housePool = diceGame.housePool();
+        vaultManager = diceGame.vaultManager();
         
         usdc.mint(lp1, INITIAL_USDC);
         usdc.mint(player1, INITIAL_USDC);
@@ -460,9 +644,9 @@ contract DiceGameTest is Test {
         
         // Pool should change based on win/loss
         if (won) {
-            assertEq(housePool.totalPool(), poolBefore - 10 * 10**6); // 10 USDC payout
+            assertEq(housePool.totalPool(), poolBefore - diceGame.ROLL_PAYOUT()); // 1 USDC payout
         } else {
-            assertEq(housePool.totalPool(), poolBefore); // No change (already received 1 USDC)
+            assertEq(housePool.totalPool(), poolBefore); // No change (already received 0.1 USDC)
         }
     }
     
@@ -616,5 +800,103 @@ contract DiceGameTest is Test {
             // Pool increased by roll cost
             assertEq(valueAfterGambling, valueBeforeGambling + rollCost);
         }
+    }
+}
+
+/* ========== VAULT MANAGER TESTS ========== */
+
+contract VaultManagerTest is Test {
+    VaultManager public vaultManager;
+    MockUSDC public usdc;
+    MockFleetCommander public mockVault;
+    address public housePool = address(0x1234);
+    
+    function setUp() public {
+        usdc = new MockUSDC();
+        mockVault = new MockFleetCommander(address(usdc));
+        vaultManager = new VaultManager(address(mockVault), address(usdc));
+    }
+    
+    function test_SetHousePool() public {
+        vaultManager.setHousePool(housePool);
+        assertEq(vaultManager.housePool(), housePool);
+        assertTrue(vaultManager.housePoolSet());
+    }
+    
+    function test_SetHousePool_OnlyOnce() public {
+        vaultManager.setHousePool(housePool);
+        
+        vm.expectRevert(VaultManager.HousePoolAlreadySet.selector);
+        vaultManager.setHousePool(address(0x5678));
+    }
+    
+    function test_SetHousePool_ZeroAddress_Reverts() public {
+        vm.expectRevert(VaultManager.InvalidAddress.selector);
+        vaultManager.setHousePool(address(0));
+    }
+    
+    function test_DepositIntoVault() public {
+        vaultManager.setHousePool(housePool);
+        
+        // Send USDC to vault manager
+        usdc.mint(address(vaultManager), 100 * 10**6);
+        
+        vm.prank(housePool);
+        uint256 shares = vaultManager.depositIntoVault(0);
+        
+        assertGt(shares, 0);
+        assertEq(vaultManager.getCurrentValue(), 100 * 10**6);
+        assertEq(vaultManager.getUSDCBalance(), 0);
+    }
+    
+    function test_DepositIntoVault_Unauthorized() public {
+        vaultManager.setHousePool(housePool);
+        usdc.mint(address(vaultManager), 100 * 10**6);
+        
+        vm.prank(address(0x9999));
+        vm.expectRevert(VaultManager.Unauthorized.selector);
+        vaultManager.depositIntoVault(0);
+    }
+    
+    function test_WithdrawFromVault() public {
+        vaultManager.setHousePool(housePool);
+        usdc.mint(address(vaultManager), 100 * 10**6);
+        
+        vm.prank(housePool);
+        vaultManager.depositIntoVault(0);
+        
+        vm.prank(housePool);
+        vaultManager.withdrawFromVault(50 * 10**6);
+        
+        // Should have withdrawn 50 USDC to housePool
+        assertEq(usdc.balanceOf(housePool), 50 * 10**6);
+        assertApproxEqAbs(vaultManager.getCurrentValue(), 50 * 10**6, 1);
+    }
+    
+    function test_GetTotalValue() public {
+        vaultManager.setHousePool(housePool);
+        
+        // Put 50 USDC in vault
+        usdc.mint(address(vaultManager), 50 * 10**6);
+        vm.prank(housePool);
+        vaultManager.depositIntoVault(0);
+        
+        // Put 30 USDC directly in contract
+        usdc.mint(address(vaultManager), 30 * 10**6);
+        
+        assertEq(vaultManager.getTotalValue(), 80 * 10**6);
+    }
+    
+    function test_EmergencyWithdraw() public {
+        vaultManager.setHousePool(housePool);
+        usdc.mint(address(vaultManager), 100 * 10**6);
+        
+        address recipient = address(0xBEEF);
+        
+        vm.prank(housePool);
+        vaultManager.emergencyWithdraw(address(usdc), 50 * 10**6, recipient);
+        
+        assertEq(usdc.balanceOf(recipient), 50 * 10**6);
+        assertEq(usdc.balanceOf(address(vaultManager)), 50 * 10**6);
     }
 }

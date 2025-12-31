@@ -3,10 +3,11 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./HousePool.sol";
+import "./VaultManager.sol";
 
 /// @title DiceGame - Commit-reveal dice game using HousePool liquidity
 /// @notice Players commit to a roll, then reveal to determine win/loss
-/// @dev Deploys its own HousePool with this contract as the immutable game
+/// @dev Deploys its own HousePool and VaultManager with this contract as the immutable game
 contract DiceGame {
     /* ========== CUSTOM ERRORS ========== */
     error GameNotPlayable();
@@ -18,6 +19,7 @@ contract DiceGame {
     /* ========== STATE VARIABLES ========== */
     
     HousePool public immutable housePool;
+    VaultManager public immutable vaultManager;
     IERC20 public immutable usdc;
     
     // Commit-reveal gambling
@@ -44,12 +46,20 @@ contract DiceGame {
 
     /* ========== CONSTRUCTOR ========== */
     
-    /// @notice Deploys a new HousePool with this DiceGame as the immutable game contract
+    /// @notice Deploys VaultManager and HousePool with this DiceGame as the immutable game contract
     /// @param _usdc Address of the USDC token
-    constructor(address _usdc) {
+    /// @param _fleetCommander Address of Summer.fi FleetCommander vault (LVUSDC on Base)
+    constructor(address _usdc, address _fleetCommander) {
         usdc = IERC20(_usdc);
-        // Deploy HousePool with this contract as the game
-        housePool = new HousePool(_usdc, address(this));
+        
+        // 1. Deploy VaultManager first
+        vaultManager = new VaultManager(_fleetCommander, _usdc);
+        
+        // 2. Deploy HousePool with VaultManager
+        housePool = new HousePool(_usdc, address(this), address(vaultManager));
+        
+        // 3. Link VaultManager to HousePool (one-time setup)
+        vaultManager.setHousePool(address(housePool));
     }
 
     /* ========== GAMBLING FUNCTIONS ========== */

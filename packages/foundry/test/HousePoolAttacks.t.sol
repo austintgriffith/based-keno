@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../contracts/HousePool.sol";
 import "../contracts/DiceGame.sol";
+import "../contracts/VaultManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @dev Simple mock USDC for testing
@@ -17,13 +18,56 @@ contract MockUSDC is ERC20 {
     }
 }
 
+/// @dev Mock ERC4626 vault to simulate Summer.fi FleetCommander
+contract MockFleetCommander is ERC20 {
+    IERC20 public immutable asset;
+    
+    constructor(address _asset) ERC20("Mock Vault Shares", "mvUSDC") {
+        asset = IERC20(_asset);
+    }
+    
+    function decimals() public pure override returns (uint8) { return 6; }
+    
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+        asset.transferFrom(msg.sender, address(this), assets);
+        shares = assets;
+        _mint(receiver, shares);
+    }
+    
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares) {
+        shares = previewWithdraw(assets);
+        _burn(owner, shares);
+        asset.transfer(receiver, assets);
+    }
+    
+    function maxWithdraw(address owner) external view returns (uint256) {
+        uint256 shares = balanceOf(owner);
+        return convertToAssets(shares);
+    }
+    
+    function previewWithdraw(uint256 assets) public view returns (uint256) {
+        uint256 totalAssets = asset.balanceOf(address(this));
+        uint256 supply = totalSupply();
+        if (supply == 0 || totalAssets == 0) return assets;
+        return (assets * supply) / totalAssets;
+    }
+    
+    function convertToAssets(uint256 shares) public view returns (uint256) {
+        uint256 supply = totalSupply();
+        if (supply == 0) return shares;
+        return (shares * asset.balanceOf(address(this))) / supply;
+    }
+}
+
 /// @title HousePool Attack Tests
 /// @notice Proof-of-concept tests demonstrating vulnerabilities in HousePool
 /// @dev These tests should PASS on vulnerable code, proving the attacks work
 contract HousePoolAttacksTest is Test {
     HousePool public housePool;
     DiceGame public diceGame;
+    VaultManager public vaultManager;
     MockUSDC public usdc;
+    MockFleetCommander public mockVault;
     
     address public attacker = address(0xBAD);
     address public victim = address(0xBEEF);
@@ -36,9 +80,13 @@ contract HousePoolAttacksTest is Test {
         // Deploy mock USDC
         usdc = new MockUSDC();
         
-        // Deploy DiceGame (which deploys HousePool internally)
-        diceGame = new DiceGame(address(usdc));
+        // Deploy mock FleetCommander vault
+        mockVault = new MockFleetCommander(address(usdc));
+        
+        // Deploy DiceGame (which deploys VaultManager and HousePool internally)
+        diceGame = new DiceGame(address(usdc), address(mockVault));
         housePool = diceGame.housePool();
+        vaultManager = diceGame.vaultManager();
         
         // Distribute USDC to test accounts
         usdc.mint(attacker, INITIAL_USDC);
@@ -444,4 +492,3 @@ contract HousePoolAttacksTest is Test {
         console.log("Users can now protect against unfavorable execution");
     }
 }
-

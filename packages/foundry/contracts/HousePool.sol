@@ -3,10 +3,11 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./VaultManager.sol";
 
-/// @title HousePool - Liquidity pool for gambling games
-/// @notice Deposit USDC to become the house. Share price grows as house profits.
-/// @dev Game contract is set immutably at deployment and can call payout
+/// @title HousePool - Liquidity pool for gambling games with DeFi yield generation
+/// @notice Deposit USDC to become the house. Share price grows as house profits + DeFi yield.
+/// @dev Game contract is set immutably at deployment. All USDC is invested in Summer.fi vault.
 contract HousePool is ERC20 {
     /* ========== CUSTOM ERRORS ========== */
     error InsufficientPool();
@@ -26,6 +27,7 @@ contract HousePool is ERC20 {
     
     IERC20 public immutable usdc;
     address public immutable game;
+    VaultManager public immutable vaultManager;
     
     // Withdrawal tracking
     struct WithdrawalRequest {
@@ -54,6 +56,8 @@ contract HousePool is ERC20 {
     event Withdraw(address indexed lp, uint256 sharesIn, uint256 usdcOut);
     event PaymentReceived(address indexed player, uint256 amount);
     event PayoutSent(address indexed player, uint256 amount);
+    event DepositedToVault(uint256 amount);
+    event WithdrawnFromVault(uint256 amount);
 
     /* ========== MODIFIERS ========== */
     
@@ -66,11 +70,13 @@ contract HousePool is ERC20 {
     
     constructor(
         address _usdc,
-        address _game
+        address _game,
+        address _vaultManager
     ) ERC20("HouseShare", "HOUSE") {
-        if (_usdc == address(0) || _game == address(0)) revert ZeroAddress();
+        if (_usdc == address(0) || _game == address(0) || _vaultManager == address(0)) revert ZeroAddress();
         usdc = IERC20(_usdc);
         game = _game;
+        vaultManager = VaultManager(payable(_vaultManager));
     }
 
     /* ========== GAME FUNCTIONS ========== */
@@ -85,6 +91,9 @@ contract HousePool is ERC20 {
         if (!success) revert TransferFailed();
         
         emit PaymentReceived(player, amount);
+        
+        // Deposit all USDC to vault for yield
+        _depositAllToVault();
     }
     
     /// @notice Pay out winnings to a player (called by game contract)
@@ -92,6 +101,10 @@ contract HousePool is ERC20 {
     /// @param amount Amount of USDC to pay out
     function payout(address player, uint256 amount) external onlyGame {
         if (amount == 0) revert ZeroAmount();
+        
+        // Withdraw from vault to cover payout
+        _withdrawFromVault(amount);
+        
         if (usdc.balanceOf(address(this)) < amount) revert InsufficientPool();
         
         bool success = usdc.transfer(player, amount);
@@ -110,14 +123,14 @@ contract HousePool is ERC20 {
         if (usdcAmount == 0) revert ZeroAmount();
         
         uint256 supply = totalSupply();
-        uint256 pool = usdc.balanceOf(address(this));
+        uint256 pool = _getTotalValue(); // Use total value including vault
         
         if (supply == 0) {
             // First deposit: enforce minimum and 1:1 ratio (scaled to 18 decimals)
             if (usdcAmount < MIN_FIRST_DEPOSIT) revert InsufficientPool();
             shares = usdcAmount * 1e12; // Scale 6 decimals → 18 decimals
         } else {
-            // Proportional shares based on current pool
+            // Proportional shares based on current pool (including vault)
             shares = (usdcAmount * supply) / pool;
         }
         
@@ -133,6 +146,9 @@ contract HousePool is ERC20 {
         _mint(msg.sender, shares);
         
         emit Deposit(msg.sender, usdcAmount, shares);
+        
+        // Deposit all USDC to vault for yield
+        _depositAllToVault();
     }
     
     /// @notice Deposit USDC without slippage protection (convenience overload)
@@ -178,13 +194,16 @@ contract HousePool is ERC20 {
         if (block.timestamp < req.unlockTime) revert WithdrawalNotReady();
         if (block.timestamp > req.expiryTime) revert WithdrawalExpired();
         
-        uint256 pool = usdc.balanceOf(address(this));
+        uint256 pool = _getTotalValue(); // Use total value including vault
         uint256 supply = totalSupply();
         
         usdcOut = (req.shares * pool) / supply;
         
         // Slippage protection
         if (usdcOut < minUsdcOut) revert SlippageExceeded();
+        
+        // Withdraw from vault to cover withdrawal
+        _withdrawFromVault(usdcOut);
         
         totalPendingShares -= req.shares;
         delete withdrawals[msg.sender];
@@ -237,16 +256,70 @@ contract HousePool is ERC20 {
         emit WithdrawalExpiredCleanup(lp, req.shares);
     }
 
+    /* ========== VAULT INTEGRATION (INTERNAL) ========== */
+    
+    /// @notice Get total value including both liquid USDC and vault holdings
+    /// @return Total USDC value (6 decimals)
+    function _getTotalValue() internal view returns (uint256) {
+        return usdc.balanceOf(address(this)) + vaultManager.getCurrentValue();
+    }
+    
+    /// @notice Deposit all liquid USDC to the vault
+    /// @dev Called after deposits and receiving payments
+    function _depositAllToVault() internal {
+        uint256 liquidBalance = usdc.balanceOf(address(this));
+        
+        if (liquidBalance > 0) {
+            // Transfer USDC to vault manager
+            bool success = usdc.transfer(address(vaultManager), liquidBalance);
+            if (success) {
+                // Deposit into vault
+                vaultManager.depositIntoVault(0); // 0 = deposit all
+                emit DepositedToVault(liquidBalance);
+            }
+        }
+    }
+    
+    /// @notice Withdraw USDC from vault
+    /// @dev Called before payouts and withdrawals
+    /// @param amount Amount of USDC needed (6 decimals)
+    function _withdrawFromVault(uint256 amount) internal {
+        uint256 liquidBalance = usdc.balanceOf(address(this));
+        
+        // Only withdraw if we don't have enough liquid
+        if (liquidBalance < amount) {
+            uint256 needed = amount - liquidBalance;
+            uint256 vaultValue = vaultManager.getCurrentValue();
+            
+            if (vaultValue > 0) {
+                // Withdraw the minimum of needed or available vault funds
+                uint256 toWithdraw = needed > vaultValue ? vaultValue : needed;
+                vaultManager.withdrawFromVault(toWithdraw);
+                emit WithdrawnFromVault(toWithdraw);
+            }
+        }
+    }
+
     /* ========== VIEW FUNCTIONS ========== */
     
-    /// @notice Total USDC in contract
+    /// @notice Total USDC value (liquid + vault)
     function totalPool() public view returns (uint256) {
+        return _getTotalValue();
+    }
+    
+    /// @notice Liquid USDC in contract (not in vault)
+    function liquidPool() public view returns (uint256) {
         return usdc.balanceOf(address(this));
+    }
+    
+    /// @notice USDC value held in vault
+    function vaultPool() public view returns (uint256) {
+        return vaultManager.getCurrentValue();
     }
     
     /// @notice Effective pool = total minus pending withdrawal value
     function effectivePool() public view returns (uint256) {
-        uint256 pool = usdc.balanceOf(address(this));
+        uint256 pool = _getTotalValue();
         uint256 supply = totalSupply();
         
         if (supply == 0 || totalPendingShares == 0) return pool;
@@ -263,14 +336,14 @@ contract HousePool is ERC20 {
         // Returns price with 18 decimal precision
         // pool is 6 decimals, supply is 18 decimals
         // (pool * 1e18) / supply gives price in 6 decimal USDC terms
-        return (usdc.balanceOf(address(this)) * 1e18) / supply;
+        return (_getTotalValue() * 1e18) / supply;
     }
     
     /// @notice USDC value of an LP's shares
     function usdcValue(address lp) external view returns (uint256) {
         uint256 supply = totalSupply();
         if (supply == 0) return 0;
-        return (balanceOf(lp) * usdc.balanceOf(address(this))) / supply;
+        return (balanceOf(lp) * _getTotalValue()) / supply;
     }
     
     /// @notice Get withdrawal request details for an LP
