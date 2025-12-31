@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../contracts/HousePool.sol";
-import "../script/DeployHousePool.s.sol";
+import "../script/Deploy.s.sol";
 
 contract HousePoolTest is Test {
     HousePool public housePool;

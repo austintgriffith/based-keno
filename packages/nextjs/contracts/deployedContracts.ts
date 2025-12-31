@@ -6,14 +6,19 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
   31337: {
-    Credits: {
-      address: "0xa422c8c8c57a25584c5848521c3dc4966650a81a",
+    HousePool: {
+      address: "0x2f8a34bb1721684658827b3aa72ef8260d5bbbbb",
       abi: [
         {
           type: "constructor",
           inputs: [
             {
-              name: "initialOwner",
+              name: "_usdc",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_uniswapRouter",
               type: "address",
               internalType: "address",
             },
@@ -22,52 +27,104 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "CANCEL_AUTHORIZATION_TYPEHASH",
+          name: "BUYBACK_THRESHOLD",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "DOMAIN_SEPARATOR",
+          name: "MIN_FIRST_DEPOSIT",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "RECEIVE_WITH_AUTHORIZATION_TYPEHASH",
+          name: "MIN_RESERVE",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "TRANSFER_WITH_AUTHORIZATION_TYPEHASH",
+          name: "ROLL_COST",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "ROLL_PAYOUT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WIN_MODULO",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WITHDRAWAL_DELAY",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WITHDRAWAL_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -122,30 +179,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "authorizationState",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "balanceOf",
           inputs: [
             {
@@ -165,17 +198,39 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "burn",
+          name: "buybackAndBurn",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "canRoll",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "cancelWithdrawal",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "cleanupExpiredWithdrawal",
           inputs: [
             {
-              name: "from",
+              name: "lp",
               type: "address",
               internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -183,36 +238,40 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "cancelAuthorization",
+          name: "commitRoll",
           inputs: [
             {
-              name: "authorizer",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "nonce",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "v",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "r",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "s",
+              name: "commitHash",
               type: "bytes32",
               internalType: "bytes32",
             },
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commits",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "hash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "blockNumber",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -229,50 +288,125 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "eip712Domain",
-          inputs: [],
-          outputs: [
+          name: "deposit",
+          inputs: [
             {
-              name: "fields",
-              type: "bytes1",
-              internalType: "bytes1",
-            },
-            {
-              name: "name",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "version",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "chainId",
+              name: "usdcAmount",
               type: "uint256",
               internalType: "uint256",
             },
+          ],
+          outputs: [
             {
-              name: "verifyingContract",
-              type: "address",
-              internalType: "address",
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
             },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "effectivePool",
+          inputs: [],
+          outputs: [
             {
-              name: "salt",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "extensions",
-              type: "uint256[]",
-              internalType: "uint256[]",
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "mint",
+          name: "getCommitment",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "hash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "blockNumber",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "canReveal",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isExpired",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getWithdrawalRequest",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "unlockTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "expiryTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "canWithdraw",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isExpired",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "liquiditySeeded",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "mintForLiquidity",
           inputs: [
             {
               name: "to",
@@ -316,52 +450,19 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "receiveWithAuthorization",
+          name: "renounceOwnership",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "requestWithdrawal",
           inputs: [
             {
-              name: "from",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "value",
+              name: "shares",
               type: "uint256",
               internalType: "uint256",
-            },
-            {
-              name: "validAfter",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "validBefore",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "nonce",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "v",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "r",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "s",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           outputs: [],
@@ -369,10 +470,48 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "renounceOwnership",
-          inputs: [],
+          name: "revealRoll",
+          inputs: [
+            {
+              name: "secret",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "won",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setUniswapRouter",
+          inputs: [
+            {
+              name: "_router",
+              type: "address",
+              internalType: "address",
+            },
+          ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "sharePrice",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -383,6 +522,32 @@ const deployedContracts = {
               name: "",
               type: "string",
               internalType: "string",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "totalPendingShares",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "totalPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -468,56 +633,90 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "transferWithAuthorization",
-          inputs: [
+          name: "uniswapRouter",
+          inputs: [],
+          outputs: [
             {
-              name: "from",
+              name: "",
               type: "address",
-              internalType: "address",
-            },
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "value",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "validAfter",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "validBefore",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "nonce",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "v",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "r",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "s",
-              type: "bytes32",
-              internalType: "bytes32",
+              internalType: "contract IUniswapV2Router02",
             },
           ],
-          outputs: [],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "usdc",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "usdcValue",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdraw",
+          inputs: [],
+          outputs: [
+            {
+              name: "usdcOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "withdrawals",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "unlockTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "expiryTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "event",
@@ -546,46 +745,65 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "AuthorizationCanceled",
+          name: "BuybackAndBurn",
           inputs: [
             {
-              name: "authorizer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
+              name: "usdcSpent",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
             {
-              name: "nonce",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
+              name: "houseBurned",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
         },
         {
           type: "event",
-          name: "AuthorizationUsed",
+          name: "Deposit",
           inputs: [
             {
-              name: "authorizer",
+              name: "lp",
               type: "address",
               indexed: true,
               internalType: "address",
             },
             {
-              name: "nonce",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
+              name: "usdcIn",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "sharesOut",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
         },
         {
           type: "event",
-          name: "EIP712DomainChanged",
-          inputs: [],
+          name: "LiquiditySeeded",
+          inputs: [
+            {
+              name: "to",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
           anonymous: false,
         },
         {
@@ -603,6 +821,50 @@ const deployedContracts = {
               type: "address",
               indexed: true,
               internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollCommitted",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "commitment",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollRevealed",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "won",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "payout",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -633,51 +895,116 @@ const deployedContracts = {
           anonymous: false,
         },
         {
-          type: "error",
-          name: "AuthorizationAlreadyUsed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "AuthorizationExpired",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "AuthorizationNotYetValid",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "CallerMustBePayee",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ECDSAInvalidSignature",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ECDSAInvalidSignatureLength",
+          type: "event",
+          name: "UniswapRouterSet",
           inputs: [
             {
-              name: "length",
+              name: "router",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Withdraw",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "sharesIn",
               type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "usdcOut",
+              type: "uint256",
+              indexed: false,
               internalType: "uint256",
             },
           ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WithdrawalCancelled",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "shares",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WithdrawalExpiredCleanup",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "shares",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WithdrawalRequested",
+          inputs: [
+            {
+              name: "lp",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "shares",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "unlockTime",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "expiryTime",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
         },
         {
           type: "error",
-          name: "ECDSAInvalidSignatureS",
-          inputs: [
-            {
-              name: "s",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
+          name: "AlreadySeeded",
+          inputs: [],
         },
         {
           type: "error",
@@ -767,12 +1094,27 @@ const deployedContracts = {
         },
         {
           type: "error",
-          name: "InvalidShortString",
+          name: "InsufficientPool",
           inputs: [],
         },
         {
           type: "error",
-          name: "InvalidSignature",
+          name: "InsufficientShares",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidReveal",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoCommitment",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoPendingWithdrawal",
           inputs: [],
         },
         {
@@ -799,691 +1141,37 @@ const deployedContracts = {
         },
         {
           type: "error",
-          name: "StringTooLong",
-          inputs: [
-            {
-              name: "str",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-        },
-      ],
-      inheritedFunctions: {},
-      deployedOnBlock: 40173569,
-    },
-    CreditsDex: {
-      address: "0xa3f13114029db8dd9cfcbd1bd9d373a855f86cb0",
-      abi: [
-        {
-          type: "constructor",
-          inputs: [
-            {
-              name: "_creditToken",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_assetToken",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "EXCESS_CAP",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROLL_COST",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROLL_MODULO",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROLL_PAYOUT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "assetInPrice",
-          inputs: [
-            {
-              name: "assetIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "creditOut",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "assetOutPrice",
-          inputs: [
-            {
-              name: "assetOut",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "creditIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "assetToCredit",
-          inputs: [
-            {
-              name: "tokensIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "minTokensBack",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "tokenOutput",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "assetToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "creditInPrice",
-          inputs: [
-            {
-              name: "creditIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "assetOut",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "creditOutPrice",
-          inputs: [
-            {
-              name: "creditOut",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "assetIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "creditToAsset",
-          inputs: [
-            {
-              name: "tokensIn",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "minTokensBack",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "tokenOutput",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "creditToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "deposit",
-          inputs: [
-            {
-              name: "creditTokenDeposited",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "maxAssetTokens",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "liquidityMinted",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "getAssetAddr",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getAssetReserves",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getCreditAddr",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getCreditReserves",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getExcess",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getLiquidity",
-          inputs: [
-            {
-              name: "_user",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getTotalUsdc",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getUsdcReserves",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "init",
-          inputs: [
-            {
-              name: "creditTokenAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "assetReservesAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "assetExcessAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "liquidity",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewDeposit",
-          inputs: [
-            {
-              name: "creditAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "assetRequired",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "price",
-          inputs: [
-            {
-              name: "xInput",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "xReserves",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "yReserves",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "yOutput",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "roll",
-          inputs: [],
-          outputs: [
-            {
-              name: "won",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "totalLiquidity",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "usdcExcess",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "withdraw",
-          inputs: [
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "creditTokenAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "assetTokenAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "event",
-          name: "LiquidityProvided",
-          inputs: [
-            {
-              name: "_user",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "_liquidityMinted",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_creditTokenAdded",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_assetTokenAdded",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "LiquidityRemoved",
-          inputs: [
-            {
-              name: "_user",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "_liquidityAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_creditTokenAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_assetTokenAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "Roll",
-          inputs: [
-            {
-              name: "_player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "_won",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "_payout",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "TokenSwap",
-          inputs: [
-            {
-              name: "_user",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "_tradeDirection",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_tokensSwapped",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "_tokensReceived",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "error",
-          name: "InitError",
+          name: "TooEarly",
           inputs: [],
         },
         {
           type: "error",
-          name: "InsufficientLiquidityError",
-          inputs: [
-            {
-              name: "_liquidityAvailable",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "SlippageError",
+          name: "TooLate",
           inputs: [],
         },
         {
           type: "error",
-          name: "TokenTransferError",
-          inputs: [
-            {
-              name: "_token",
-              type: "address",
-              internalType: "address",
-            },
-          ],
+          name: "TransferFailed",
+          inputs: [],
         },
         {
           type: "error",
-          name: "ZeroQuantityError",
+          name: "WithdrawalExpired",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WithdrawalNotReady",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ZeroAmount",
           inputs: [],
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40173569,
+      deployedOnBlock: 40178267,
     },
   },
 } as const;

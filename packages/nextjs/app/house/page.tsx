@@ -333,7 +333,8 @@ const HousePage: NextPage = () => {
   const withdrawalExpiryTime = withdrawalRequest ? new Date(Number(withdrawalRequest[2]) * 1000) : null;
 
   // Parse commitment
-  const hasCommitment = commitment && commitment[0] !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const hasCommitment =
+    commitment && commitment[0] !== "0x0000000000000000000000000000000000000000000000000000000000000000";
   const commitmentCanReveal = commitment && commitment[2];
   const commitmentIsExpired = commitment && commitment[3];
 
@@ -362,7 +363,9 @@ const HousePage: NextPage = () => {
         </div>
         <div className="bg-base-100 rounded-2xl p-4 shadow-lg border border-base-300">
           <p className="text-xs text-base-content/60 uppercase tracking-wide">Can Roll?</p>
-          <p className={`text-2xl font-bold ${canRoll ? "text-success" : "text-error"}`}>{canRoll ? "Yes ✓" : "No ✗"}</p>
+          <p className={`text-2xl font-bold ${canRoll ? "text-success" : "text-error"}`}>
+            {canRoll ? "Yes ✓" : "No ✗"}
+          </p>
         </div>
       </div>
 
@@ -599,4 +602,3 @@ const HousePage: NextPage = () => {
 };
 
 export default HousePage;
-
