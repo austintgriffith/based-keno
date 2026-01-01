@@ -1,0 +1,51 @@
+import { foundry, base } from "viem/chains";
+import type { Chain } from "viem";
+import { loadContract, hasDeployments } from "./contracts.js";
+
+// Chain configs
+export const chains: Record<number, Chain> = {
+  31337: foundry,
+  8453: base,
+};
+
+// Default RPC URLs
+export const defaultRpcUrls: Record<number, string> = {
+  31337: "http://127.0.0.1:8545",
+  8453: "https://mainnet.base.org",
+};
+
+// Contract name to load
+const TARGET_CONTRACT = "BasedKeno";
+
+export function getConfig() {
+  const privateKey = process.env.DEALER_PRIVATE_KEY;
+  if (!privateKey) {
+    throw new Error("DEALER_PRIVATE_KEY environment variable is required");
+  }
+
+  const chainId = parseInt(process.env.CHAIN_ID || "31337", 10);
+  const rpcUrl = process.env.RPC_URL || defaultRpcUrls[chainId];
+  const chain = chains[chainId];
+
+  if (!chain) {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+
+  // Dynamically load contract from foundry deployments
+  if (!hasDeployments(chainId)) {
+    throw new Error(
+      `No deployments found for chain ${chainId}. Run 'yarn deploy' in packages/foundry first.`
+    );
+  }
+
+  const contract = loadContract(chainId, TARGET_CONTRACT);
+
+  return {
+    privateKey: privateKey as `0x${string}`,
+    chainId,
+    rpcUrl,
+    contractAddress: contract.address,
+    contractAbi: contract.abi,
+    chain,
+  };
+}

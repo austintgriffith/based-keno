@@ -21,7 +21,7 @@ const PAYOUT_TABLE: { [picks: number]: { [hits: number]: number } } = {
 
 interface BetPanelProps {
   selectedNumbers: number[];
-  maxBet: bigint;
+  effectivePool: bigint;
   userBalance: bigint;
   onPlaceBet: (amount: bigint) => Promise<void>;
   onQuickPick: () => void;
@@ -32,7 +32,7 @@ interface BetPanelProps {
 
 export const BetPanel = ({
   selectedNumbers,
-  maxBet,
+  effectivePool,
   userBalance,
   onPlaceBet,
   onQuickPick,
@@ -55,9 +55,17 @@ export const BetPanel = ({
 
   const maxMultiplier = getMaxMultiplier(picks);
 
-  // Format values
-  const formatUsdc = (value: bigint) =>
-    parseFloat(formatUnits(value, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  // Calculate max bet based on effective pool and max multiplier for selected picks
+  // maxBet = effectivePool / maxMultiplier (where multiplier is already divided by 10)
+  const maxBet = hasValidPicks && maxMultiplier > 0 ? effectivePool / BigInt(Math.ceil(maxMultiplier)) : 0n;
+
+  // Format values - use more decimals for small amounts so max bet isn't shown as $0
+  const formatUsdc = (value: bigint, minDecimals = 2) => {
+    const num = parseFloat(formatUnits(value, 6));
+    // Show up to 4 decimals for small values (< $1), 2 for larger
+    const maxDecimals = num < 1 && num > 0 ? 4 : 2;
+    return num.toLocaleString(undefined, { minimumFractionDigits: minDecimals, maximumFractionDigits: maxDecimals });
+  };
 
   const betAmountBigInt = betAmount ? parseUnits(betAmount, 6) : 0n;
   const potentialWin = betAmount ? (parseFloat(betAmount) * maxMultiplier).toFixed(2) : "0";
@@ -67,7 +75,7 @@ export const BetPanel = ({
     betAmountBigInt > 0n &&
     betAmountBigInt <= maxBet &&
     betAmountBigInt <= userBalance &&
-    betAmountBigInt >= parseUnits("0.1", 6); // MIN_BET = 0.1 USDC
+    betAmountBigInt >= parseUnits("0.01", 6); // MIN_BET = 0.01 USDC
 
   const handlePlaceBet = async () => {
     if (!canBet) return;
@@ -127,17 +135,17 @@ export const BetPanel = ({
           <div className="form-control flex-1">
             <label className="label py-1">
               <span className="label-text text-sm">Bet Amount (USDC)</span>
-              <span className="label-text-alt text-xs">Max: ${formatUsdc(maxBet)}</span>
+              <span className="label-text-alt text-xs">Min: $0.01 · Max: ${formatUsdc(maxBet)}</span>
             </label>
             <input
               type="number"
               className="input input-bordered w-full"
-              placeholder="0.10"
+              placeholder="0.01 (min)"
               value={betAmount}
               onChange={e => setBetAmount(e.target.value)}
               disabled={disabled || !hasValidPicks}
-              min="0.1"
-              step="0.1"
+              min="0.01"
+              step="0.01"
             />
           </div>
           <button
@@ -213,7 +221,15 @@ export const BetPanel = ({
 
         {/* Validation Messages */}
         {!hasValidPicks && <p className="text-xs text-warning text-center">Select 1-10 numbers to bet</p>}
-        {hasValidPicks && betAmountBigInt > maxBet && (
+        {hasValidPicks && maxBet < parseUnits("0.01", 6) && (
+          <p className="text-xs text-warning text-center">
+            House pool too small for betting (max: ${formatUsdc(maxBet, 4)}). Need more LP deposits.
+          </p>
+        )}
+        {hasValidPicks && betAmountBigInt > 0n && betAmountBigInt < parseUnits("0.01", 6) && (
+          <p className="text-xs text-error text-center">Minimum bet is $0.01 USDC</p>
+        )}
+        {hasValidPicks && betAmountBigInt > maxBet && maxBet >= parseUnits("0.01", 6) && (
           <p className="text-xs text-error text-center">Bet exceeds maximum allowed (${formatUsdc(maxBet)})</p>
         )}
         {hasValidPicks && betAmountBigInt > userBalance && (

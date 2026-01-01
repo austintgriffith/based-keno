@@ -1620,7 +1620,7 @@ const deployedContracts = {
   },
   31337: {
     BasedKeno: {
-      address: "0x25d23b63f166ec74b87b40cbcc5548d29576c56c",
+      address: "0x058a6bdf12e0c3b5087e8b5990f78aaf437869b2",
       abi: [
         {
           type: "constructor",
@@ -1736,7 +1736,7 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "TIMEOUT_BLOCKS",
+          name: "TIMEOUT_SECONDS",
           inputs: [],
           outputs: [
             {
@@ -1941,7 +1941,7 @@ const deployedContracts = {
               internalType: "enum BasedKeno.RoundPhase",
             },
             {
-              name: "startBlock",
+              name: "startTime",
               type: "uint256",
               internalType: "uint256",
             },
@@ -1974,6 +1974,25 @@ const deployedContracts = {
               name: "canRefund",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getMaxMultiplier",
+          inputs: [
+            {
+              name: "picks",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
             },
           ],
           stateMutability: "view",
@@ -2062,6 +2081,25 @@ const deployedContracts = {
           type: "function",
           name: "maxBet",
           inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "maxBetForPicks",
+          inputs: [
+            {
+              name: "picks",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
@@ -2185,7 +2223,7 @@ const deployedContracts = {
               internalType: "enum BasedKeno.RoundPhase",
             },
             {
-              name: "startBlock",
+              name: "startTime",
               type: "uint256",
               internalType: "uint256",
             },
@@ -2349,7 +2387,7 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "startBlock",
+              name: "startTime",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -2491,10 +2529,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40217165,
+      deployedOnBlock: 40221786,
     },
     HousePool: {
-      address: "0x06613A0B36a41ae459A03A2Fd9aF588E2c07ec6F",
+      address: "0x04D4572F0083dC11e484C71Fe9fed2B7245183DE",
       abi: [
         {
           type: "constructor",
@@ -3459,7 +3497,7 @@ const deployedContracts = {
       inheritedFunctions: {},
     },
     VaultManager: {
-      address: "0x974fb78aE31079d3a44Da3791875AE6B9db63619",
+      address: "0xc3db0A0eFA420C9F6537a51E76d9E717c5139696",
       abi: [
         {
           type: "constructor",

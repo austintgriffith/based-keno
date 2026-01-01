@@ -45,8 +45,8 @@ contract BasedKeno {
     
     struct Round {
         RoundPhase phase;
-        uint256 startBlock;
-        uint256 commitBlock;
+        uint256 startTime;      // block.timestamp when round started
+        uint256 commitBlock;    // block.number when committed (needed for blockhash)
         bytes32 commitHash;
         uint8[20] winningNumbers;
         uint256 totalCards;
@@ -74,13 +74,13 @@ contract BasedKeno {
     uint256 public constant MAX_PICKS = 10;
     
     // Betting parameters
-    uint256 public constant MIN_BET = 1e5;        // 0.10 USDC minimum
+    uint256 public constant MIN_BET = 1e4;        // 0.01 USDC minimum
     uint256 public constant MAX_MULTIPLIER = 2500; // Cap for max payout calculation
     
-    // Timing (in blocks, ~2 sec per block on Base)
-    uint256 public constant BETTING_PERIOD = 30;   // ~1 minute of betting
-    uint256 public constant REVEAL_WINDOW = 256;   // Must reveal within 256 blocks
-    uint256 public constant TIMEOUT_BLOCKS = 1800; // ~1 hour timeout for refunds
+    // Timing
+    uint256 public constant BETTING_PERIOD = 30;      // 30 seconds of betting
+    uint256 public constant REVEAL_WINDOW = 256;      // Must reveal within 256 blocks (EVM blockhash constraint)
+    uint256 public constant TIMEOUT_SECONDS = 3600;   // 1 hour timeout for refunds
     
     // Payout multipliers (scaled by 10 for decimal precision, e.g., 38 = 3.8x)
     // payouts[picks-1][hits] = multiplier * 10
@@ -89,7 +89,7 @@ contract BasedKeno {
 
     /* ========== EVENTS ========== */
     
-    event RoundStarted(uint256 indexed roundId, uint256 startBlock);
+    event RoundStarted(uint256 indexed roundId, uint256 startTime);
     event BetPlaced(uint256 indexed roundId, uint256 indexed cardId, address indexed player, uint8[] numbers, uint256 betAmount);
     event RoundCommitted(uint256 indexed roundId, bytes32 commitHash, uint256 commitBlock);
     event RoundRevealed(uint256 indexed roundId, uint8[20] winningNumbers);
@@ -194,8 +194,9 @@ contract BasedKeno {
         // Validate bet amount
         if (betAmount < MIN_BET) revert BetTooSmall();
         
-        // Check max bet based on pool and potential max payout
-        uint256 maxPayout = (betAmount * MAX_MULTIPLIER);
+        // Check max bet based on pool and actual max payout for this number of picks
+        uint16 maxMult = _getMaxMultiplier(uint8(numbers.length));
+        uint256 maxPayout = (betAmount * maxMult) / 10; // Divide by 10 since multipliers are scaled
         if (maxPayout > housePool.effectivePool()) revert BetTooLarge();
         
         // Get or start current round
@@ -204,8 +205,8 @@ contract BasedKeno {
         if (round.phase == RoundPhase.Idle) {
             // First bet starts the round
             round.phase = RoundPhase.Open;
-            round.startBlock = block.number;
-            emit RoundStarted(currentRound, block.number);
+            round.startTime = block.timestamp;
+            emit RoundStarted(currentRound, block.timestamp);
         } else if (round.phase != RoundPhase.Open) {
             revert RoundNotOpen();
         }
@@ -257,7 +258,7 @@ contract BasedKeno {
         
         Round storage round = rounds[currentRound];
         if (round.phase != RoundPhase.Open) revert RoundNotOpen();
-        if (block.number < round.startBlock + BETTING_PERIOD) revert BettingPeriodNotOver();
+        if (block.timestamp < round.startTime + BETTING_PERIOD) revert BettingPeriodNotOver();
         
         round.phase = RoundPhase.Committed;
         round.commitBlock = block.number;
@@ -380,15 +381,16 @@ contract BasedKeno {
         if (round.phase == RoundPhase.Revealed) revert NothingToRefund();
         
         // Check timeout
-        uint256 timeoutBlock;
+        bool canRefund;
         if (round.phase == RoundPhase.Open) {
-            timeoutBlock = round.startBlock + TIMEOUT_BLOCKS;
+            // Betting phase timeout uses timestamp
+            canRefund = block.timestamp > round.startTime + TIMEOUT_SECONDS;
         } else {
-            // Committed phase - also check if blockhash expired
-            timeoutBlock = round.commitBlock + REVEAL_WINDOW;
+            // Committed phase - check if blockhash expired (uses blocks)
+            canRefund = block.number > round.commitBlock + REVEAL_WINDOW;
         }
         
-        if (block.number <= timeoutBlock) revert TimeoutNotReached();
+        if (!canRefund) revert TimeoutNotReached();
         
         // Refund all cards
         uint256 totalRefunded = 0;
@@ -413,7 +415,7 @@ contract BasedKeno {
     function getCurrentRound() external view returns (
         uint256 roundId,
         RoundPhase phase,
-        uint256 startBlock,
+        uint256 startTime,
         uint256 commitBlock,
         uint256 totalCards,
         uint256 totalBets,
@@ -424,16 +426,16 @@ contract BasedKeno {
         roundId = currentRound;
         Round storage round = rounds[currentRound];
         phase = round.phase;
-        startBlock = round.startBlock;
+        startTime = round.startTime;
         commitBlock = round.commitBlock;
         totalCards = round.totalCards;
         totalBets = round.totalBets;
         
         canBet = phase == RoundPhase.Idle || phase == RoundPhase.Open;
-        canCommit = phase == RoundPhase.Open && block.number >= round.startBlock + BETTING_PERIOD;
+        canCommit = phase == RoundPhase.Open && block.timestamp >= round.startTime + BETTING_PERIOD;
         
         if (phase == RoundPhase.Open) {
-            canRefund = block.number > round.startBlock + TIMEOUT_BLOCKS;
+            canRefund = block.timestamp > round.startTime + TIMEOUT_SECONDS;
         } else if (phase == RoundPhase.Committed) {
             canRefund = block.number > round.commitBlock + REVEAL_WINDOW;
         }
@@ -492,9 +494,42 @@ contract BasedKeno {
         return payouts[picks - 1][hits];
     }
     
-    /// @notice Calculate max bet based on current pool
+    /// @dev Get the maximum multiplier for a given number of picks
+    /// @param picks Number of numbers picked (1-10)
+    /// @return maxMult Maximum possible multiplier (scaled by 10)
+    function _getMaxMultiplier(uint8 picks) internal view returns (uint16 maxMult) {
+        if (picks < MIN_PICKS || picks > MAX_PICKS) return 0;
+        
+        // Find the highest multiplier for this number of picks
+        uint16[11] storage pickPayouts = payouts[picks - 1];
+        for (uint8 i = 0; i <= picks; i++) {
+            if (pickPayouts[i] > maxMult) {
+                maxMult = pickPayouts[i];
+            }
+        }
+    }
+    
+    /// @notice Get the maximum multiplier for a given number of picks (public view)
+    /// @param picks Number of numbers picked (1-10)
+    /// @return maxMult Maximum possible multiplier (scaled by 10)
+    function getMaxMultiplier(uint8 picks) external view returns (uint16) {
+        return _getMaxMultiplier(picks);
+    }
+    
+    /// @notice Calculate max bet based on current pool (uses most conservative multiplier)
+    /// @dev For dynamic max bet based on picks, use maxBetForPicks()
     function maxBet() external view returns (uint256) {
         return housePool.effectivePool() / MAX_MULTIPLIER;
+    }
+    
+    /// @notice Calculate max bet for a specific number of picks
+    /// @param picks Number of numbers to pick (1-10)
+    /// @return Maximum bet amount in USDC (6 decimals)
+    function maxBetForPicks(uint8 picks) external view returns (uint256) {
+        uint16 maxMult = _getMaxMultiplier(picks);
+        if (maxMult == 0) return 0;
+        // effectivePool * 10 / maxMult (since maxMult is scaled by 10)
+        return (housePool.effectivePool() * 10) / maxMult;
     }
 }
 

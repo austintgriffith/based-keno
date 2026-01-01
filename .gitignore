@@ -21,6 +21,7 @@ node_modules
 .env*.local
 packages/foundry/.env
 packages/nextjs/.env.local
+packages/dealer/.env
 
 # IDE
 .vscode

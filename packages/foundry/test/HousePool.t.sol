@@ -616,11 +616,13 @@ contract BasedKenoTest is Test {
         uint8[] memory picks = new uint8[](1);
         picks[0] = 1;
         
-        // Max bet = 100 USDC / 2500 = 0.04 USDC
-        // Try to bet 1 USDC - should fail
+        // For 1 pick, max multiplier is 3.8x (38 scaled by 10)
+        // Max payout = bet * 38 / 10 = bet * 3.8
+        // Pool = 100 USDC, so max bet = 100 / 3.8 = ~26.3 USDC
+        // Try to bet 30 USDC - should fail
         vm.prank(player1);
         vm.expectRevert(BasedKeno.BetTooLarge.selector);
-        basedKeno.placeBet(picks, 1 * 10**6);
+        basedKeno.placeBet(picks, 30 * 10**6);
     }
     
     function test_CommitRound_OnlyDealer() public {
@@ -633,8 +635,8 @@ contract BasedKenoTest is Test {
         vm.prank(player1);
         basedKeno.placeBet(picks, 1 * 10**6);
         
-        // Advance past betting period
-        vm.roll(block.number + 31);
+        // Advance past betting period (30 seconds)
+        vm.warp(block.timestamp + 31);
         
         // Non-dealer should fail
         bytes32 secret = bytes32("dealer_secret");
@@ -679,8 +681,8 @@ contract BasedKenoTest is Test {
         vm.prank(player1);
         uint256 cardId = basedKeno.placeBet(picks, 1 * 10**6);
         
-        // Advance past betting period
-        vm.roll(block.number + 31);
+        // Advance past betting period (30 seconds)
+        vm.warp(block.timestamp + 31);
         
         // Dealer commits
         bytes32 secret = bytes32("dealer_secret");
@@ -688,7 +690,7 @@ contract BasedKenoTest is Test {
         vm.prank(dealer);
         basedKeno.commitRound(commitHash);
         
-        // Advance 1 block for reveal
+        // Advance 1 block for reveal (blockhash requires next block)
         vm.roll(block.number + 1);
         
         // Dealer reveals
@@ -726,13 +728,15 @@ contract BasedKenoTest is Test {
         vm.prank(player1);
         basedKeno.placeBet(picks, 1 * 10**6);
         
-        vm.roll(block.number + 31);
+        // Advance past betting period (30 seconds)
+        vm.warp(block.timestamp + 31);
         
         bytes32 secret = bytes32("dealer_secret");
         bytes32 commitHash = keccak256(abi.encodePacked(secret));
         vm.prank(dealer);
         basedKeno.commitRound(commitHash);
         
+        // Advance 1 block for reveal
         vm.roll(block.number + 1);
         
         // Wrong secret
