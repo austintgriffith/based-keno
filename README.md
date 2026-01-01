@@ -192,25 +192,34 @@ If you don't execute within the window, request expires and you keep your HOUSE 
 
 ## Quickstart
 
-1. Install dependencies:
+1. Clone the repo (with submodules):
+
+```bash
+git clone --recurse-submodules https://github.com/YOUR_USERNAME/based-keno.git
+cd based-keno
+```
+
+> **Note:** If you already cloned without `--recurse-submodules`, run: `git submodule update --init --recursive`
+
+2. Install dependencies:
 
 ```bash
 yarn install
 ```
 
-2. Fork Base mainnet locally (required for Summer.fi vault integration):
+3. Fork Base mainnet locally (required for Summer.fi vault integration):
 
 ```bash
 yarn fork --network base
 ```
 
-3. Deploy contracts:
+4. Deploy contracts:
 
 ```bash
 yarn deploy
 ```
 
-4. Start the frontend:
+5. Start the frontend:
 
 ```bash
 yarn start

@@ -21,8 +21,6 @@ contract DeployScript is ScaffoldETHDeploy {
     address constant DEALER = 0xDBF21195C3980abcD9AB19646b90AE8dc17b33Ec;
 
     function run() external ScaffoldEthDeployerRunner {
-        address deployer = msg.sender;
-        
         // Deploy BasedKeno (which deploys VaultManager and HousePool internally)
         BasedKeno basedKeno = new BasedKeno(USDC, FLEET_COMMANDER, DEALER);
         
